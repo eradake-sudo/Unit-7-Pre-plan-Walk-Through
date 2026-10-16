@@ -345,6 +345,9 @@ function removeLocation(id) {
   const loc = library.locations.find(l => l.id === id);
   const name = (loc && loc.survey.building.name) || "this location";
   if (!confirm("Remove " + name + " from this phone?")) return;
+  if (id === "demo-tour") {
+    try { localStorage.setItem("fd-preplan-demo-off", "1"); } catch (e) {}
+  }
   library.locations = library.locations.filter(l => l.id !== id);
   if (library.activeId === id) {
     library.activeId = null;
@@ -784,6 +787,88 @@ function bootSheet() {
   const fix = () => { try { m.invalidateSize(); } catch (e) {} };
   setTimeout(fix, 80); setTimeout(fix, 400);
 }
+function demoPlanImage() {
+  const c = document.createElement("canvas");
+  c.width = 900;
+  c.height = 640;
+  const g = c.getContext("2d");
+  g.fillStyle = "#f4f1ea";
+  g.fillRect(0, 0, 900, 640);
+  g.strokeStyle = "#1a1406";
+  g.lineWidth = 6;
+  g.strokeRect(36, 36, 828, 540);
+  g.lineWidth = 3;
+  g.beginPath();
+  g.moveTo(36, 250); g.lineTo(864, 250);
+  g.moveTo(36, 340); g.lineTo(864, 340);
+  g.moveTo(300, 36); g.lineTo(300, 250);
+  g.moveTo(580, 36); g.lineTo(580, 250);
+  g.moveTo(300, 340); g.lineTo(300, 576);
+  g.moveTo(620, 340); g.lineTo(620, 576);
+  g.stroke();
+  g.fillStyle = "#1a1406";
+  g.font = "bold 28px sans-serif";
+  g.fillText("N", 430, 28);
+  g.font = "20px sans-serif";
+  g.fillText("Office", 120, 150);
+  g.fillText("Classroom 1", 370, 150);
+  g.fillText("Classroom 2", 660, 150);
+  g.fillText("Hall", 430, 305);
+  g.fillText("Classroom 3", 90, 470);
+  g.fillText("Gym", 430, 470);
+  g.fillText("Kitchen", 700, 470);
+  g.font = "bold 18px sans-serif";
+  g.fillText("DEMO — 1st floor. Not a real building.", 36, 620);
+  return c.toDataURL("image/jpeg", 0.85);
+}
+function demoSurvey() {
+  const lat = 39.0987;
+  const lng = -89.8262;
+  return {
+    building: {
+      name: "DEMO — Sample School",
+      address: "Mount Clare, IL",
+      occupancy: "Educational (Group E)",
+      stories: "1",
+      contactName: "Demo only",
+      contactPhone: "",
+      hazards: "Demo only. Not a real pre-plan.",
+      hydrants: "South side of the lot, and one across the road to the east.",
+      notes: "Sample sheet. Zoom the satellite photo and the floor diagram, then tap the pins. Remove this from the location list when you are done.",
+      lastInspected: "2020-10-16",
+      center: { lat: lat, lng: lng, zoom: 18 }
+    },
+    absent: {},
+    pins: [
+      { id: "d-gas", type: "gas", note: "West wall, outside the kitchen. Come in from the west.", lat: lat + 0.00008, lng: lng - 0.00032 },
+      { id: "d-elec", type: "electric", note: "Northwest corner. Meter and disconnect on the north wall.", lat: lat + 0.00026, lng: lng - 0.00012 },
+      { id: "d-hyd1", type: "hydrant", note: "South side of the lot, near the road.", lat: lat - 0.00038, lng: lng - 0.00004 },
+      { id: "d-hyd2", type: "hydrant", note: "Across the road, east of the building.", lat: lat - 0.0001, lng: lng + 0.00048 },
+      { id: "d-knox", type: "knox", note: "Main door, south side, right of the entrance.", lat: lat - 0.00018, lng: lng + 0.00002 },
+      { id: "d-exit", type: "exits", note: "Main entrance faces south. Second exit is on the east wall by the gym.", lat: lat - 0.00016, lng: lng + 0.00022 }
+    ],
+    plans: [{
+      id: "d-plan",
+      name: "1st floor",
+      image: demoPlanImage(),
+      pins: [
+        { id: "d-facp", type: "facp", note: "Office, north wall, just inside the hall.", x: 16, y: 28 },
+        { id: "d-ex1", type: "exits", note: "South main entrance.", x: 50, y: 86 },
+        { id: "d-ex2", type: "exits", note: "East exit at the gym.", x: 90, y: 68 },
+        { id: "d-spk", type: "sprinkler", note: "Riser in the kitchen, west wall of that room.", x: 78, y: 72 },
+        { id: "d-alm", type: "alarm", note: "Pull station at the south hall door.", x: 48, y: 46 },
+        { id: "d-det", type: "detector", note: "Smoke detector, center of classroom 2.", x: 74, y: 24 }
+      ]
+    }]
+  };
+}
+function ensureDemo() {
+  try { if (localStorage.getItem("fd-preplan-demo-off")) return; } catch (e) { return; }
+  if (library.locations.some(l => l.id === "demo-tour")) return;
+  library.locations.unshift({ id: "demo-tour", updated: Date.now(), survey: demoSurvey() });
+  save();
+}
+ensureDemo();
 render();
 </script>
 </body>
