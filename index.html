@@ -333,6 +333,12 @@ function render() {
       <input id="stories" type="number" value="${survey.building.stories || 1}" min="1">
       <label>Notes (construction, special concerns)</label>
       <textarea id="notes" rows="3" placeholder="Old Family Dollar converted to school...">${survey.building.notes || ''}</textarea>
+      <label>Primary Contact Name & Phone</label>
+      <input id="contact" value="${survey.building.contact || ''}" placeholder="Name / phone">
+      <label>Known Hazards</label>
+      <textarea id="hazards" rows="2" placeholder="Fireworks storage at Bill Rockets, oxygen tanks, etc.">${survey.building.hazards || ''}</textarea>
+      <label>Nearest Hydrant Notes</label>
+      <textarea id="hydrants" rows="2" placeholder="Hydrant 50 ft north on Main St, another on alley side">${survey.building.hydrants || ''}</textarea>
       <div class="nav">
         <button class="secondary" onclick="prev()">Back</button>
         <button onclick="saveBuilding()">Next: Exterior Map</button>
@@ -346,9 +352,9 @@ function render() {
       <h1>Exterior – Map & GPS</h1>
       <p>The map opens in satellite view centered on the address you entered. Use “My Location” to jump to your GPS, or tap the map to drop pins. Switch layers (top right) between Satellite and Streets if needed.</p>
       <button onclick="centerOnMe()">📍 My Location (GPS)</button>
-      <button class="secondary" onclick="initMap()">Refresh Map</button>
-      <div id="map" style="height:320px; min-height:320px; width:100%; background:#1a1d21; border:2px solid #1d9bf0; border-radius:12px; margin:12px 0; display:block;">
-        Map loading…
+      <button onclick="forceLoadMap()" style="background:#00ba7c;">Show Map</button>
+      <div id="map" style="height:320px; min-height:320px; width:100%; background:#1a1d21; border:2px solid #1d9bf0; border-radius:12px; margin:12px 0; display:block; position:relative;">
+        <div style="padding:40px 20px; text-align:center; color:#71767b;">Tap “Show Map” above to load satellite view</div>
       </div>
       <div class="card">
         <h2>What to look for & mark</h2>
@@ -369,7 +375,6 @@ function render() {
         <button onclick="next()">Next: Interior</button>
       </div>
     `;
-    initMap();
     renderPins();
   }
 
@@ -446,6 +451,7 @@ function render() {
         `).join('') || '<p>None yet.</p>'}
       </div>
       <button ${missing.length ? 'disabled' : ''} onclick="finish()">Mark Survey Complete</button>
+      <button onclick="generateQuickActionPlan()">View / Save Quick Action Plan</button>
       <button class="secondary" onclick="currentStep=0; render()">Back to Start</button>
       <button class="secondary" onclick="exportData()">Export Notes + Coordinates</button>
     `;
@@ -461,8 +467,101 @@ function saveBuilding() {
   survey.building.occupancy = document.getElementById('occupancy').value;
   survey.building.stories = document.getElementById('stories').value;
   survey.building.notes = document.getElementById('notes').value;
+  survey.building.contact = document.getElementById('contact').value;
+  survey.building.hazards = document.getElementById('hazards').value;
+  survey.building.hydrants = document.getElementById('hydrants').value;
   save();
   next();
+}
+
+function generateQuickActionPlan() {
+  const b = survey.building || {};
+  const pins = survey.pins || [];
+
+  const byType = (type) => pins.filter(p => p.type === type);
+  const utilAccess = (type) => {
+    const list = byType(type);
+    if (!list.length) return 'Not marked';
+    return list.map(p => `${p.note || 'No note'} ${p.lat ? `(${p.lat.toFixed(5)}, ${p.lng.toFixed(5)})` : ''}`).join('; ');
+  };
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quick Action Plan – ${b.name || 'Building'}</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin: 16px; background: #fff; color: #111; }
+  h1 { font-size: 1.6rem; margin: 0 0 8px; }
+  h2 { font-size: 1.2rem; border-bottom: 2px solid #1d9bf0; padding-bottom: 4px; margin-top: 20px; }
+  .box { border: 1px solid #ddd; border-radius: 8px; padding: 12px; margin: 10px 0; }
+  .critical { color: #c00; font-weight: 600; }
+  .coords { font-family: monospace; font-size: 0.85rem; color: #555; }
+  img, video { max-width: 100%; max-height: 200px; border-radius: 6px; margin: 6px 0; }
+  @media print { button { display: none; } }
+</style>
+</head>
+<body>
+  <h1>Quick Action Plan</h1>
+  <p><strong>${b.name || 'Unnamed Building'}</strong><br>
+  ${b.address || 'No address'}<br>
+  ${b.occupancy || ''} • ${b.stories || 1} story(ies)</p>
+
+  <div class="box">
+    <h2>Contacts & Occupancy</h2>
+    <p><strong>Contact:</strong> ${b.contact || 'Not entered'}</p>
+    <p><strong>Notes:</strong> ${b.notes || 'None'}</p>
+  </div>
+
+  <div class="box">
+    <h2>Hazards</h2>
+    <p class="critical">${b.hazards || 'None noted'}</p>
+  </div>
+
+  <div class="box">
+    <h2>Hydrants & Exterior Access</h2>
+    <p><strong>Hydrants:</strong> ${b.hydrants || 'Not noted'}</p>
+    <p><strong>Gas shutoff (fastest exterior access):</strong><br>${utilAccess('gas')}</p>
+    <p><strong>Electric main (fastest exterior access):</strong><br>${utilAccess('electric')}</p>
+    <p><strong>Knox box:</strong><br>${utilAccess('knox')}</p>
+  </div>
+
+  <div class="box">
+    <h2>Exits & Entrances</h2>
+    ${byType('exits').map(p => `<p>• ${p.note || 'Exit'} ${p.lat ? `<span class="coords">(${p.lat.toFixed(5)}, ${p.lng.toFixed(5)})</span>` : ''}</p>`).join('') || '<p>None marked</p>'}
+  </div>
+
+  <div class="box">
+    <h2>Interior – FACP & Layout</h2>
+    <p><strong>Fire Alarm Panel:</strong><br>${utilAccess('facp')}</p>
+    <p><strong>Interior notes / hallways / walls:</strong> Check floor plan pins and photos below.</p>
+  </div>
+
+  <div class="box">
+    <h2>All Marked Locations</h2>
+    ${pins.map(p => `
+      <div style="margin-bottom:12px;">
+        <strong>${p.type.toUpperCase()}</strong>: ${p.note || 'No note'}<br>
+        ${p.lat ? `<span class="coords">GPS ${p.lat.toFixed(6)}, ${p.lng.toFixed(6)}</span><br>` : ''}
+        ${p.media ? (p.mediaType === 'video' ? `<video src="${p.media}" controls></video>` : `<img src="${p.media}">`) : ''}
+      </div>
+    `).join('') || '<p>None</p>'}
+  </div>
+
+  <p style="margin-top:24px; font-size:0.85rem; color:#666;">Generated ${new Date().toLocaleString()} • Pre-Plan Walkthrough</p>
+  <button onclick="window.print()" style="padding:12px 20px; background:#1d9bf0; color:#fff; border:none; border-radius:8px; font-size:1rem;">Save as PDF / Print</button>
+</body>
+</html>`;
+
+  const w = window.open('', '_blank');
+  if (w) {
+    w.document.write(html);
+    w.document.close();
+  } else {
+    alert('Pop-up blocked. Allow pop-ups for this site, then try again.');
+  }
 }
 
 function addPinWithMedia(type) {
@@ -529,85 +628,84 @@ function renderPins() {
   `).join('') || '<small>No pins yet on this step.</small>';
 }
 
-function initMap() {
-  const tryInit = (attempts = 0) => {
-    const mapEl = document.getElementById('map');
-    if (!mapEl) return;
-
-    // Wait until the container has real dimensions
-    const rect = mapEl.getBoundingClientRect();
-    if ((rect.height < 100 || rect.width < 100) && attempts < 15) {
-      setTimeout(() => tryInit(attempts + 1), 100);
-      return;
-    }
-
-    if (typeof L === 'undefined') {
-      mapEl.innerHTML = '<div style="padding:20px; text-align:center; color:#f4212e;">Map library failed to load.<br><small>Check connection and refresh.</small></div>';
-      return;
-    }
-
-    // Clear any previous map
-    if (window.map) {
-      try { window.map.remove(); } catch (e) {}
-      window.map = null;
-    }
-    mapEl.innerHTML = '';
-
-    const map = L.map(mapEl, { zoomControl: true, preferCanvas: true }).setView([39.13, -89.82], 16);
-
-    const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-      attribution: 'Tiles &copy; Esri',
-      maxZoom: 19
+function forceLoadMap() {
+  const mapEl = document.getElementById('map');
+  if (!mapEl) return;
+  mapEl.innerHTML = '<div style="padding:40px 20px; text-align:center;">Loading map…</div>';
+  // Give the layout one full frame, then init
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      initMap(true);
     });
+  });
+}
 
-    const streets = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap',
-      maxZoom: 19
-    });
+function initMap(force = false) {
+  const mapEl = document.getElementById('map');
+  if (!mapEl) return;
 
-    satellite.addTo(map);
-    L.control.layers({ 'Satellite': satellite, 'Streets': streets }).addTo(map);
-    window.map = map;
+  if (typeof L === 'undefined') {
+    mapEl.innerHTML = '<div style="padding:20px; text-align:center; color:#f4212e;">Map library failed to load.<br><small>Check connection and refresh the page.</small></div>';
+    return;
+  }
 
-    // Geocode address
-    const address = (survey.building.address || '') + (survey.building.name ? ' ' + survey.building.name : '');
-    if (address.trim()) {
-      fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`)
-        .then(r => r.json())
-        .then(data => {
-          if (data && data[0]) {
-            const lat = parseFloat(data[0].lat);
-            const lon = parseFloat(data[0].lon);
-            map.setView([lat, lon], 18);
-            L.marker([lat, lon]).addTo(map).bindPopup('Building').openPopup();
-          }
-        })
-        .catch(() => {});
-    }
+  if (window.map) {
+    try { window.map.remove(); } catch (e) {}
+    window.map = null;
+  }
 
-    map.on('click', e => {
-      const type = prompt('Pin type (gas, electric, knox, facp, exit, other):', 'other') || 'other';
-      const note = prompt('Short note:') || '';
-      const pin = { type: type.toLowerCase(), note, lat: e.latlng.lat, lng: e.latlng.lng, time: new Date().toISOString() };
-      survey.pins.push(pin);
-      survey.completed[type.toLowerCase()] = true;
-      save();
-      L.marker(e.latlng).addTo(map).bindPopup(`${type}: ${note}`);
-      renderPins();
-    });
+  mapEl.innerHTML = '';
 
-    survey.pins.filter(p => p.lat && !p.floorplan).forEach(p => {
-      L.marker([p.lat, p.lng]).addTo(map).bindPopup(`${p.type}: ${p.note || ''}`);
-    });
+  const map = L.map(mapEl, { zoomControl: true, preferCanvas: true }).setView([39.13, -89.82], 16);
 
-    // Multiple redraws for mobile layout
-    const redraw = () => { try { map.invalidateSize(); } catch(e){} };
-    setTimeout(redraw, 50);
-    setTimeout(redraw, 200);
-    setTimeout(redraw, 600);
-  };
+  const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    attribution: 'Tiles &copy; Esri',
+    maxZoom: 19
+  });
 
-  setTimeout(() => tryInit(), 50);
+  const streets = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap',
+    maxZoom: 19
+  });
+
+  satellite.addTo(map);
+  L.control.layers({ 'Satellite': satellite, 'Streets': streets }).addTo(map);
+  window.map = map;
+
+  const address = (survey.building.address || '') + (survey.building.name ? ' ' + survey.building.name : '');
+  if (address.trim()) {
+    fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`)
+      .then(r => r.json())
+      .then(data => {
+        if (data && data[0]) {
+          const lat = parseFloat(data[0].lat);
+          const lon = parseFloat(data[0].lon);
+          map.setView([lat, lon], 18);
+          L.marker([lat, lon]).addTo(map).bindPopup('Building').openPopup();
+        }
+      })
+      .catch(() => {});
+  }
+
+  map.on('click', e => {
+    const type = prompt('Pin type (gas, electric, knox, facp, exit, other):', 'other') || 'other';
+    const note = prompt('Short note:') || '';
+    const pin = { type: type.toLowerCase(), note, lat: e.latlng.lat, lng: e.latlng.lng, time: new Date().toISOString() };
+    survey.pins.push(pin);
+    survey.completed[type.toLowerCase()] = true;
+    save();
+    L.marker(e.latlng).addTo(map).bindPopup(`${type}: ${note}`);
+    renderPins();
+  });
+
+  survey.pins.filter(p => p.lat && !p.floorplan).forEach(p => {
+    L.marker([p.lat, p.lng]).addTo(map).bindPopup(`${p.type}: ${p.note || ''}`);
+  });
+
+  // Force size after layout
+  setTimeout(() => { try { map.invalidateSize(); } catch(e){} }, 50);
+  setTimeout(() => { try { map.invalidateSize(); } catch(e){} }, 300);
+  setTimeout(() => { try { map.invalidateSize(); } catch(e){} }, 800);
 }
 
 function centerOnMe() {
