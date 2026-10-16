@@ -42,6 +42,8 @@
   .sym { display: block; filter: drop-shadow(0 1px 2px rgba(0,0,0,.7)); }
   .hint { background: #212830; border-radius: 12px; padding: 12px; color: #c5cdd5; font-size: 0.95rem; }
   .hint strong { color: #f3f5f7; }
+  .check { display: flex; align-items: center; gap: 10px; color: #f3f5f7; margin: 8px 0; }
+  .check input { width: auto; margin: 0; }
   .detail { background: #212830; border-radius: 10px; padding: 10px; margin-top: 8px; }
 </style>
 </head>
@@ -58,9 +60,13 @@ const TYPES = [
   { id: "knox", label: "Knox", short: "KNOX", fill: "#f3f5f7", ink: "#1a1406" },
   { id: "exits", label: "Exit", short: "EXIT", fill: "#16a34a", ink: "#fff" },
   { id: "facp", label: "FACP", short: "FACP", fill: "#dc2626", ink: "#fff" },
+  { id: "sprinkler", label: "Sprinkler", short: "SPK", fill: "#0ea5e9", ink: "#082f49" },
+  { id: "alarm", label: "Alarm", short: "ALM", fill: "#be123c", ink: "#fff" },
+  { id: "detector", label: "Detector", short: "DET", fill: "#facc15", ink: "#1a1406" },
   { id: "other", label: "Other", short: "OTH", fill: "#64748b", ink: "#fff" }
 ];
-const CRITICAL = ["gas", "electric", "knox", "exits", "facp"];
+const CRITICAL = ["gas", "electric", "exits"];
+const INT_IDS = ["hydrant", "sprinkler", "alarm", "detector", "facp", "exits", "knox", "other"];
 const STEPS = ["start", "building", "exterior", "interior", "plan"];
 const KEY = "fd-preplan-pages-v2";
 let step = 0;
@@ -72,7 +78,7 @@ let sheetMaps = [];
 let openDetail = null;
 
 function blank() {
-  return { building: { name: "", address: "", occupancy: "Educational (Group E)", stories: "1", contactName: "", contactPhone: "", hazards: "", hydrants: "", notes: "", center: null }, pins: [], plans: [] };
+  return { building: { name: "", address: "", occupancy: "Educational (Group E)", stories: "1", contactName: "", contactPhone: "", hazards: "", hydrants: "", notes: "", center: null }, pins: [], plans: [], absent: {} };
 }
 function load() {
   try {
@@ -83,6 +89,7 @@ function load() {
     if (!Array.isArray(data.plans)) data.plans = [];
     if (!data.building.contactName && data.building.contact) data.building.contactName = data.building.contact;
     if (!data.building.contactPhone) data.building.contactPhone = "";
+    if (!data.absent) data.absent = {};
     return data;
   } catch (e) { return blank(); }
 }
@@ -164,14 +171,18 @@ function render() {
     showPins();
     setTimeout(bootMap, 30);
   } else if (s === "interior") {
-    const missing = CRITICAL.filter(id => !survey.pins.some(p => p.type === id) && id !== "facp" && id !== "exits");
-    const intMissing = ["facp", "exits"].filter(id => !survey.plans.some(pl => pl.pins.some(p => p.type === id)) && !survey.pins.some(p => p.type === id));
+    const intMissing = ["exits"].filter(gap);
     app.innerHTML = `<h1>Interior</h1>
-      <div class="hint"><strong>What to look for.</strong> Photograph the paper floor plan, then tap the diagram to mark the FACP, exits, and anything that changes how you enter or search. Note the room and the wall.</div>
+      <div class="hint"><strong>What to look for.</strong> Zoom the diagram, then tap hydrants, sprinklers, alarms, detectors, exits, and the panel if the building has one. Note the room and the wall.</div>
+      <div class="card">
+        <strong>Not on this site</strong>
+        <label class="check"><input type="checkbox" ${isAbsent("knox") ? "checked" : ""} onchange="toggleAbsent('knox', this.checked)"> No Knox box</label>
+        <label class="check"><input type="checkbox" ${isAbsent("facp") ? "checked" : ""} onchange="toggleAbsent('facp', this.checked)"> No fire alarm panel</label>
+      </div>
       <label>Floor plan name</label><input id="planName" placeholder="1st floor, basement, attic">
       <button class="ghost" onclick="document.getElementById('planFile').click()">Upload paper diagram</button>
       <input id="planFile" type="file" accept="image/*" capture="environment" style="display:none" onchange="addPlan(this)">
-      <div class="chips">${TYPES.filter(t => t.id === "facp" || t.id === "exits" || t.id === "other" || t.id === "knox").map(t => `<button class="${intActive === t.id ? "on" : "ghost"}" onclick="setIntType('${t.id}')">${t.label}</button>`).join("")}</div>
+      <div class="chips">${INT_IDS.map(id => { const t = typeOf(id); return `<button class="${intActive === id ? "on" : "ghost"}" onclick="setIntType('${id}')">${t.label}</button>`; }).join("")}</div>
       <div id="plans"></div>
       ${intMissing.length ? `<div class="warn">Still needed: ${intMissing.map(label).join(", ")}</div>` : ""}
       <div id="pins"></div>
@@ -227,12 +238,18 @@ function saveBuilding() {
   b.notes = document.getElementById("notes").value;
   save(); go(2);
 }
+function isAbsent(id) { return !!(survey.absent && survey.absent[id]); }
+function toggleAbsent(id, on) {
+  if (!survey.absent) survey.absent = {};
+  survey.absent[id] = !!on;
+  save();
+}
+function marked(id) {
+  return survey.pins.some(p => p.type === id) || survey.plans.some(pl => pl.pins.some(p => p.type === id));
+}
+function gap(id) { return !isAbsent(id) && !marked(id); }
 function finish() {
-  const missing = CRITICAL.filter(id => {
-    const onMap = survey.pins.some(p => p.type === id);
-    const onPlan = survey.plans.some(pl => pl.pins.some(p => p.type === id));
-    return !onMap && !onPlan;
-  });
+  const missing = CRITICAL.filter(gap);
   if (missing.length && !confirm("Missing: " + missing.map(label).join(", ") + ". Open the sheet anyway?")) return;
   go(4);
 }
@@ -445,7 +462,7 @@ function showPlans() {
   survey.plans.forEach(pl => bindPlanGestures(pl.id, true));
 }
 function planPins(pl) {
-  return pl.pins.map(p => `<span class="plan-pin" style="left:${p.x}%;top:${p.y}%" onclick="event.stopPropagation();openPin('${p.id}','${pl.id}')">${symbolSvg(p.type, 28)}</span>`).join("");
+  return pl.pins.map(p => `<span class="plan-pin" style="left:${p.x}%;top:${p.y}%" onclick="event.stopPropagation();openPin('${p.id}','${pl.id}')">${symbolSvg(p.type, 16)}</span>`).join("");
 }
 function removePlan(id) {
   survey.plans = survey.plans.filter(p => p.id !== id);
@@ -516,9 +533,10 @@ function flyAddress() {
 
 function sheetHtml() {
   const b = survey.building;
-  const missing = CRITICAL.filter(id => !survey.pins.some(p => p.type === id) && !survey.plans.some(pl => pl.pins.some(p => p.type === id)));
+  const missing = CRITICAL.filter(gap);
   const line = id => {
     const list = survey.pins.filter(p => p.type === id).concat(survey.plans.flatMap(pl => pl.pins.filter(p => p.type === id)));
+    if (!list.length && isAbsent(id)) return `<p><strong>${label(id)}:</strong> Not on this site</p>`;
     return `<p><strong>${label(id)}:</strong> ${list.length ? list.map(p => esc(p.note) || "Marked, no note").join("; ") : "Not marked"}</p>`;
   };
   return `<h1>Quick Action Sheet</h1>
@@ -535,7 +553,7 @@ function sheetHtml() {
       ${planFrame(pl)}
       <div id="sheet-detail-${pl.id}"></div>
     </div>`).join("") : `<p><small>No interior diagram uploaded.</small></p>`}
-    <div class="card"><strong>Interior notes</strong>${line("facp")}<p>${esc(b.notes)}</p></div>
+    <div class="card"><strong>Interior</strong>${line("sprinkler")}${line("alarm")}${line("detector")}${line("facp")}<p>${esc(b.notes)}</p></div>
     ${survey.pins.map(p => `<div class="card"><strong>${symbolSvg(p.type, 20)} ${label(p.type)}</strong> — ${esc(p.note) || "No note"}${p.lat != null ? `<br><small>${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}</small>` : ""}${p.media && p.mediaType !== "video" ? `<img class="shot" src="${p.media}" alt="">` : ""}</div>`).join("")}
     <div class="nav"><button class="ghost" onclick="go(3)">Back</button><button onclick="window.print()">Save PDF</button></div>`;
 }
