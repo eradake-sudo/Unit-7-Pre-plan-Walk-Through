@@ -349,25 +349,18 @@ function render() {
 
   else if (step === 'exterior') {
     app.innerHTML = `
-      <h1>Exterior – Map & GPS</h1>
-      <p>The map opens in satellite view centered on the address you entered. Use “My Location” to jump to your GPS, or tap the map to drop pins. Switch layers (top right) between Satellite and Streets if needed.</p>
+      <h1>Exterior – Satellite Map</h1>
+      <p>Tap the map to drop a marker. Choose type (gas, electric, hydrant, exit, Knox, other). Attach a photo if needed. Markers save GPS coordinates for the Quick Action Plan.</p>
       <button onclick="centerOnMe()">📍 My Location (GPS)</button>
-      <button onclick="forceLoadMap()" style="background:#00ba7c;">Show Map</button>
-      <div id="map" style="height:320px; min-height:320px; width:100%; background:#1a1d21; border:2px solid #1d9bf0; border-radius:12px; margin:12px 0; display:block; position:relative;">
-        <div style="padding:40px 20px; text-align:center; color:#71767b;">Tap “Show Map” above to load satellite view</div>
-      </div>
+      <div id="map" style="height:380px; width:100%; background:#1a1d21; border:2px solid #1d9bf0; border-radius:12px; margin:12px 0;"></div>
       <div class="card">
-        <h2>What to look for & mark</h2>
-        ${CRITICAL_ITEMS.filter(i => ['gas','electric','knox'].includes(i.id)).map(i => `
-          <div style="margin-bottom:12px;">
-            <strong class="${survey.completed[i.id] ? '' : 'critical'}">${i.label}</strong><br>
-            <small>${i.tip}</small>
-          </div>
-        `).join('')}
-        <button onclick="addPinWithMedia('gas')">Mark Gas Shutoff + Photo/Video</button>
-        <button onclick="addPinWithMedia('electric')">Mark Electric Main + Photo/Video</button>
-        <button onclick="addPinWithMedia('knox')">Mark Knox Box + Photo/Video</button>
-        <button class="secondary" onclick="addPinWithMedia('other')">Mark Other Exterior Item</button>
+        <h2>Quick Mark Buttons</h2>
+        <button onclick="addPinWithMedia('gas')">Mark Gas Shutoff + Photo</button>
+        <button onclick="addPinWithMedia('electric')">Mark Electric Main + Photo</button>
+        <button onclick="addPinWithMedia('hydrant')">Mark Hydrant + Photo</button>
+        <button onclick="addPinWithMedia('knox')">Mark Knox Box + Photo</button>
+        <button onclick="addPinWithMedia('exits')">Mark Exit / Entrance + Photo</button>
+        <button class="secondary" onclick="addPinWithMedia('other')">Mark Other</button>
       </div>
       <div class="pin-list" id="pinlist"></div>
       <div class="nav">
@@ -375,6 +368,7 @@ function render() {
         <button onclick="next()">Next: Interior</button>
       </div>
     `;
+    setTimeout(initMap, 200);
     renderPins();
   }
 
