@@ -352,7 +352,10 @@ function render() {
       <h1>Exterior – Satellite Map</h1>
       <p>Tap the map to drop a marker. Choose type (gas, electric, hydrant, exit, Knox, other). Attach a photo if needed. Markers save GPS coordinates for the Quick Action Plan.</p>
       <button onclick="centerOnMe()">📍 My Location (GPS)</button>
-      <div id="map" style="height:380px; width:100%; background:#1a1d21; border:2px solid #1d9bf0; border-radius:12px; margin:12px 0;"></div>
+      <div id="map" style="height:380px; width:100%; background:#1a1d21; border:2px solid #1d9bf0; border-radius:12px; margin:12px 0; position:relative; overflow:hidden;">
+        <img id="static-sat" style="width:100%; height:100%; object-fit:cover;" alt="Satellite view">
+        <div id="map-overlay" style="position:absolute; top:8px; left:8px; background:rgba(0,0,0,0.6); color:#fff; padding:4px 8px; border-radius:4px; font-size:0.8rem;">Loading satellite…</div>
+      </div>
       <div class="card">
         <h2>Quick Mark Buttons</h2>
         <button onclick="addPinWithMedia('gas')">Mark Gas Shutoff + Photo</button>
@@ -368,7 +371,7 @@ function render() {
         <button onclick="next()">Next: Interior</button>
       </div>
     `;
-    setTimeout(initMap, 200);
+    setTimeout(initMap, 300);
     renderPins();
   }
 
@@ -634,72 +637,63 @@ function forceLoadMap() {
   });
 }
 
-function initMap(force = false) {
+function initMap() {
   const mapEl = document.getElementById('map');
+  const staticImg = document.getElementById('static-sat');
+  const overlay = document.getElementById('map-overlay');
   if (!mapEl) return;
 
-  if (typeof L === 'undefined') {
-    mapEl.innerHTML = '<div style="padding:20px; text-align:center; color:#f4212e;">Map library failed to load.<br><small>Check connection and refresh the page.</small></div>';
-    return;
-  }
-
-  if (window.map) {
-    try { window.map.remove(); } catch (e) {}
-    window.map = null;
-  }
-
-  mapEl.innerHTML = '';
-
-  const map = L.map(mapEl, { zoomControl: true, preferCanvas: true }).setView([39.13, -89.82], 16);
-
-  const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-    attribution: 'Tiles &copy; Esri',
-    maxZoom: 19
-  });
-
-  const streets = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; OpenStreetMap',
-    maxZoom: 19
-  });
-
-  satellite.addTo(map);
-  L.control.layers({ 'Satellite': satellite, 'Streets': streets }).addTo(map);
-  window.map = map;
-
-  const address = (survey.building.address || '') + (survey.building.name ? ' ' + survey.building.name : '');
-  if (address.trim()) {
+  const address = ((survey.building.address || '') + ' ' + (survey.building.name || '')).trim();
+  if (address && staticImg) {
+    // Static satellite fallback that always shows
+    const staticUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${encodeURIComponent(address)}&zoom=18&size=600x400&maptype=satellite&key=`;
+    // Use Esri static as free alternative
+    staticImg.src = `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?bbox=-89.85,39.12,-89.80,39.14&bboxSR=4326&imageSR=4326&size=600,400&format=png&f=image`;
+    // Better: geocode then use a known static service
     fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`)
       .then(r => r.json())
       .then(data => {
         if (data && data[0]) {
-          const lat = parseFloat(data[0].lat);
-          const lon = parseFloat(data[0].lon);
-          map.setView([lat, lon], 18);
-          L.marker([lat, lon]).addTo(map).bindPopup('Building').openPopup();
+          const lat = parseFloat(data[0].lat), lon = parseFloat(data[0].lon);
+          staticImg.src = `https://staticmap.openstreetmap.de/staticmap.php?center=${lat},${lon}&zoom=18&size=600x400&maptype=mapnik`;
+          // Prefer satellite if available via other free endpoint
+          staticImg.src = `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?bbox=${lon-0.002},${lat-0.002},${lon+0.002},${lat+0.002}&bboxSR=4326&imageSR=4326&size=600,400&format=png&f=image`;
+          if (overlay) overlay.textContent = 'Satellite view of address';
         }
-      })
-      .catch(() => {});
+      }).catch(() => {});
   }
 
-  map.on('click', e => {
-    const type = prompt('Pin type (gas, electric, knox, facp, exit, other):', 'other') || 'other';
-    const note = prompt('Short note:') || '';
-    const pin = { type: type.toLowerCase(), note, lat: e.latlng.lat, lng: e.latlng.lng, time: new Date().toISOString() };
-    survey.pins.push(pin);
-    survey.completed[type.toLowerCase()] = true;
-    save();
-    L.marker(e.latlng).addTo(map).bindPopup(`${type}: ${note}`);
-    renderPins();
-  });
-
-  survey.pins.filter(p => p.lat && !p.floorplan).forEach(p => {
-    L.marker([p.lat, p.lng]).addTo(map).bindPopup(`${p.type}: ${p.note || ''}`);
-  });
-
-  // Force size after layout
-  setTimeout(() => { try { map.invalidateSize(); } catch(e){} }, 50);
-  setTimeout(() => { try { map.invalidateSize(); } catch(e){} }, 300);
-  setTimeout(() => { try { map.invalidateSize(); } catch(e){} }, 800);
+  const tryLeaflet = (attempt = 0) => {
+    if (typeof L === 'undefined') {
+      if (attempt < 4) setTimeout(() => tryLeaflet(attempt + 1), 400);
+      else if (overlay) overlay.textContent = 'Static satellite (interactive map unavailable)';
+      return;
+    }
+    if (window.map) { try { window.map.remove(); } catch(e){} window.map = null; }
+    // Clear overlay and image once Leaflet is ready
+    if (staticImg) staticImg.style.display = 'none';
+    if (overlay) overlay.style.display = 'none';
+    mapEl.innerHTML = '';
+    const map = L.map(mapEl).setView([39.13, -89.82], 16);
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+      attribution: 'Esri', maxZoom: 19
+    }).addTo(map);
+    window.map = map;
+    map.on('click', e => {
+      const type = prompt('Type (gas, electric, hydrant, exits, knox, other):', 'gas') || 'other';
+      const note = prompt('Note (side / access):') || '';
+      const pin = { type: type.toLowerCase(), note, lat: e.latlng.lat, lng: e.latlng.lng, time: new Date().toISOString() };
+      survey.pins.push(pin);
+      survey.completed[pin.type] = true;
+      save();
+      L.marker(e.latlng).addTo(map).bindPopup(`${type}: ${note}`);
+      renderPins();
+    });
+    survey.pins.filter(p => p.lat && !p.floorplan).forEach(p => L.marker([p.lat, p.lng]).addTo(map).bindPopup(p.type + ': ' + (p.note || '')));
+    setTimeout(() => map.invalidateSize(), 200);
+    setTimeout(() => map.invalidateSize(), 600);
+  };
+  setTimeout(() => tryLeaflet(0), 200);
 }
 
 function centerOnMe() {
