@@ -310,6 +310,7 @@ function render() {
       <div class="chips" id="chips">${chipHtml(false)}</div>
       <div id="map-wrap"><div id="map"></div></div>
       <p><small id="map-status">Finding the address…</small></p>
+      <button type="button" onclick="goToPhone()">My location</button>
       <p><small>Tap the photo to drop a <span id="active-label">${label(active)}</span>.</small></p>
       <div class="nav"><button class="ghost" type="button" onclick="dropCenter()">Drop at center</button><button class="ghost" type="button" onclick="dropGps()">Drop at my GPS</button></div>
       <div id="pins"></div>`;
@@ -559,6 +560,25 @@ function photo(id, input, planId) {
     });
   };
   reader.readAsDataURL(file);
+}
+function goToPhone() {
+  const status = document.getElementById("map-status");
+  if (!navigator.geolocation) { alert("GPS is not available on this device."); return; }
+  if (status) status.textContent = "Getting the phone location…";
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      if (!map) return;
+      const lat = pos.coords.latitude;
+      const lng = pos.coords.longitude;
+      map.setView([lat, lng], 19);
+      if (status) status.textContent = "Phone location";
+    },
+    () => {
+      if (status) status.textContent = "Location was denied.";
+      alert("Location was denied. Allow location for this site, then tap My location again.");
+    },
+    { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+  );
 }
 function dropGps(type) {
   if (!navigator.geolocation) { alert("GPS is not available on this device."); return; }
