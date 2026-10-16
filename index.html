@@ -30,6 +30,7 @@
   .bar { height: 4px; background: #212830; border-radius: 4px; margin: 10px 0 16px; }
   .bar > div { height: 100%; background: #e8a317; width: 0; }
   .warn { border: 1px solid #e23b3b; color: #e23b3b; border-radius: 12px; padding: 12px; }
+  .flag { color: #e23b3b; font-weight: 700; margin: 8px 0; }
   .thumb { width: 72px; height: 72px; object-fit: cover; border-radius: 8px; margin-top: 8px; display: block; cursor: pointer; }
   .lightbox { position: fixed; inset: 0; z-index: 5000; background: rgba(0,0,0,.92); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; }
   .lightbox img, .lightbox video { max-width: 100%; max-height: 68vh; object-fit: contain; border-radius: 10px; }
@@ -191,7 +192,22 @@ function shrinkExisting() {
 }
 function typeOf(id) { return TYPES.find(t => t.id === id) || TYPES[TYPES.length - 1]; }
 function label(id) { return typeOf(id).label; }
-function uid() { return Math.random().toString(36).slice(2, 10); }
+function tourInfo(dateStr) {
+  if (!dateStr) return { due: true, text: "No inspection date" };
+  const d = new Date(dateStr + "T00:00:00");
+  if (isNaN(d.getTime())) return { due: true, text: "No inspection date" };
+  const dueOn = new Date(d.getTime());
+  dueOn.setFullYear(dueOn.getFullYear() + 5);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const pretty = d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  return { due: today >= dueOn, text: "Last inspected " + pretty };
+}
+function tourFlag(dateStr) {
+  const info = tourInfo(dateStr);
+  if (!info.due) return `<p><small>${esc(info.text)}</small></p>`;
+  return `<div class="flag">${esc(info.text)} · Due for tour</div>`;
+}
 function esc(s) {
   return String(s || "").replace(/[&<>"']/g, function (c) {
     if (c === "&") return "&" + "amp;";
@@ -227,14 +243,22 @@ function render() {
   const s = STEPS[step];
   const b = survey.building;
   if (s === "start") {
-    const locs = library.locations.slice().sort((a, b) => (a.survey.building.name || "").localeCompare(b.survey.building.name || ""));
+    const locs = library.locations.slice().sort((a, b) => {
+      const ad = tourInfo(a.survey.building.lastInspected).due ? 0 : 1;
+      const bd = tourInfo(b.survey.building.lastInspected).due ? 0 : 1;
+      if (ad !== bd) return ad - bd;
+      return (a.survey.building.name || "").localeCompare(b.survey.building.name || "");
+    });
+    const dueCount = locs.filter(loc => tourInfo(loc.survey.building.lastInspected).due).length;
     app.innerHTML = `<h1>Locations</h1>
       <p>Tap a building to open its Quick Action Sheet. You can zoom and tap pins. You cannot change them.</p>
+      ${dueCount ? `<div class="warn">${dueCount} ${dueCount === 1 ? "business is" : "businesses are"} due for a 5-year tour.</div>` : ""}
       ${locs.length ? locs.map(loc => {
         const bld = loc.survey.building;
         const name = bld.name || bld.address || "Unnamed";
         return `<div class="card">
           <button class="loc" onclick="openSheet('${loc.id}')"><strong>${esc(name)}</strong><small>${esc(bld.address || "No address")}</small><small>${esc(bld.occupancy || "")}</small></button>
+          ${tourFlag(bld.lastInspected)}
           <div class="nav"><button class="ghost" onclick="editLocation('${loc.id}')">Update</button><button class="ghost" onclick="removeLocation('${loc.id}')">Remove</button></div>
         </div>`;
       }).join("") : `<p><small>No saved locations on this phone yet.</small></p>`}
@@ -245,6 +269,7 @@ function render() {
       <label>Address</label><input id="address" value="${esc(b.address)}" placeholder="1022 N High St, Carlinville IL">
       <label>Occupancy</label><select id="occ"><option>Educational (Group E)</option><option>Mercantile</option><option>Business</option><option>Assembly</option><option>Residential</option><option>Industrial</option><option>Other</option></select>
       <label>Stories</label><input id="stories" value="${esc(b.stories || "1")}">
+      <label>Last inspected</label><input id="inspected" type="date" value="${esc(b.lastInspected || "")}">
       <label>Contact name</label><input id="contactName" value="${esc(b.contactName || b.contact || "")}" placeholder="Owner or manager">
       <label>Phone</label><input id="contactPhone" type="tel" value="${esc(b.contactPhone || "")}" placeholder="(217) 555-0100">
       <label>Hazards</label><textarea id="hazards" rows="2">${esc(b.hazards)}</textarea>
@@ -357,6 +382,7 @@ function saveBuilding() {
   if (prev !== b.address) b.center = null;
   b.occupancy = document.getElementById("occ").value;
   b.stories = document.getElementById("stories").value;
+  b.lastInspected = document.getElementById("inspected").value;
   b.contactName = document.getElementById("contactName").value;
   b.contactPhone = document.getElementById("contactPhone").value;
   b.hazards = document.getElementById("hazards").value;
@@ -378,6 +404,7 @@ function finish() {
   readOnly = false;
   const missing = CRITICAL.filter(gap);
   if (missing.length && !confirm("Missing: " + missing.map(label).join(", ") + ". Open the sheet anyway?")) return;
+  survey.building.lastInspected = new Date().toISOString().slice(0, 10);
   go(4);
 }
 
@@ -706,6 +733,7 @@ function sheetHtml() {
   };
   return `<h1>Quick Action Sheet</h1>
     <p>${esc(b.name) || "Unnamed"} · ${esc(b.address) || "No address"}</p>
+    ${tourFlag(b.lastInspected)}
     ${readOnly ? `<p><small>Look only. Zoom the map and the diagrams. Tap a pin to read it.</small></p>` : ""}
     ${missing.length && !readOnly ? `<div class="warn">Still missing: ${missing.map(label).join(", ")}</div>` : ""}
     <h2>Exterior</h2>
