@@ -35,7 +35,10 @@
     -webkit-user-select: none;
     user-select: none;
   }
-  .leaflet-container img { max-width: none !important; max-height: none !important; -webkit-user-drag: none; -webkit-touch-callout: none; }
+  .leaflet-tile-pane,
+  .leaflet-tile-container,
+  .leaflet-tile { pointer-events: none !important; }
+  .leaflet-container img { max-width: none !important; max-height: none !important; }
   .bar { height: 4px; background: #2a2a2a; border-radius: 0; margin: 0 0 16px; }
   .bar > div { height: 100%; background: #c8102e; width: 0; }
   .warn { border: 1px solid #c8102e; color: #ff6b6b; border-radius: 4px; padding: 12px; background: #2a1212; }
@@ -103,6 +106,10 @@ shrinkExisting();
 let map, pinLayer, buildingMarker;
 let sheetMaps = [];
 let openDetail = null;
+
+function uid() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+}
 
 function blank() {
   return { building: { name: "", address: "", occupancy: "", stories: "", contactName: "", contactPhone: "", hazards: "", hydrants: "", notes: "", center: null }, pins: [], plans: [], absent: {} };
@@ -474,7 +481,7 @@ function addPin(lat, lng, type) {
 }
 function dropAt(lat, lng) {
   const now = Date.now();
-  if (now - (dropAt.last || 0) < 350) return;
+  if (now - (dropAt.last || 0) < 500) return;
   dropAt.last = now;
   addPin(lat, lng);
 }
@@ -482,33 +489,42 @@ function bindMapDrop(map) {
   const box = map.getContainer();
   box.addEventListener("contextmenu", function (e) { e.preventDefault(); });
   map.on("click", function (e) { dropAt(e.latlng.lat, e.latlng.lng); });
-  let down = null;
-  function arm(x, y, target) {
-    if (target && target.closest && target.closest(".leaflet-control")) { down = null; return; }
-    down = { x: x, y: y };
-  }
-  function release(x, y, target) {
-    if (!down || !map) return;
-    if (target && target.closest && target.closest(".leaflet-control")) { down = null; return; }
-    const dx = x - down.x;
-    const dy = y - down.y;
-    down = null;
-    if (Math.abs(dx) > 28 || Math.abs(dy) > 28) return;
+  let start = null;
+  function point(x, y) {
     const rect = box.getBoundingClientRect();
-    const ll = map.containerPointToLatLng(L.point(x - rect.left, y - rect.top));
+    return map.containerPointToLatLng(L.point(x - rect.left, y - rect.top));
+  }
+  function begin(x, y, target) {
+    if (target && target.closest && target.closest(".leaflet-control")) { start = null; return; }
+    start = { x: x, y: y };
+  }
+  function end(x, y, target) {
+    if (!start) return;
+    if (target && target.closest && target.closest(".leaflet-control")) { start = null; return; }
+    const dx = x - start.x;
+    const dy = y - start.y;
+    start = null;
+    if (Math.abs(dx) > 40 || Math.abs(dy) > 40) return;
+    const ll = point(x, y);
     dropAt(ll.lat, ll.lng);
   }
-  box.addEventListener("pointerdown", function (e) { arm(e.clientX, e.clientY, e.target); }, true);
-  box.addEventListener("pointerup", function (e) { release(e.clientX, e.clientY, e.target); }, true);
   box.addEventListener("touchstart", function (e) {
-    if (e.touches.length !== 1) { down = null; return; }
-    arm(e.touches[0].clientX, e.touches[0].clientY, e.target);
+    if (e.touches.length !== 1) { start = null; return; }
+    begin(e.touches[0].clientX, e.touches[0].clientY, e.target);
   }, { capture: true, passive: true });
   box.addEventListener("touchend", function (e) {
-    if (e.changedTouches.length !== 1) return;
+    if (!e.changedTouches || e.changedTouches.length !== 1) return;
     const t = e.changedTouches[0];
-    release(t.clientX, t.clientY, e.target);
-  }, { capture: true, passive: true });
+    end(t.clientX, t.clientY, e.target);
+  }, { capture: true, passive: false });
+  box.addEventListener("pointerdown", function (e) {
+    if (e.pointerType === "touch") return;
+    begin(e.clientX, e.clientY, e.target);
+  }, true);
+  box.addEventListener("pointerup", function (e) {
+    if (e.pointerType === "touch") return;
+    end(e.clientX, e.clientY, e.target);
+  }, true);
 }
 function patch(id, note, planId) {
   const pin = findPin(id, planId);
