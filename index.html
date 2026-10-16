@@ -258,7 +258,6 @@ function render() {
     });
     const dueCount = locs.filter(loc => tourInfo(loc.survey.building.lastInspected).due).length;
     app.innerHTML = `<h1>Locations</h1>
-      <p>Tap a building to open its Quick Action Sheet. You can zoom and tap pins. You cannot change them.</p>
       <div class="card">
         <strong>Department list</strong>
         <p id="dept-status"><small>${esc(deptMessage)}</small></p>
