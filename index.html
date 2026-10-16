@@ -42,6 +42,8 @@
   .bar { height: 4px; background: #2a2a2a; border-radius: 0; margin: 0 0 16px; }
   .bar > div { height: 100%; background: #c8102e; width: 0; }
   .warn { border: 1px solid #c8102e; color: #ff6b6b; border-radius: 4px; padding: 12px; background: #2a1212; }
+  .access { margin: 2px 0 10px; padding-left: 18px; }
+  .access li { margin: 6px 0; color: #d8d8d8; }
   .flag { color: #ff6b6b; font-weight: 800; margin: 8px 0; letter-spacing: 0.04em; text-transform: uppercase; }
   .thumb { width: 72px; height: 72px; object-fit: cover; border-radius: 4px; margin-top: 8px; display: block; cursor: pointer; }
   .lightbox { position: fixed; inset: 0; z-index: 5000; background: rgba(0,0,0,.92); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; }
@@ -871,6 +873,28 @@ function popupHtml(p) {
   return `<strong>${label(p.type)}</strong>${p.note ? "<br>" + esc(p.note) : "<br>No note"}` +
     (p.media && p.mediaType !== "video" ? `<br><img class="thumb" src="${p.media}" alt="" onclick="openPhoto('${p.id}')">` : "");
 }
+function exteriorNotes(id) {
+  const raw = survey.pins.filter(p => p.type === id && p.lat != null).map(p => (p.note || "").trim()).filter(Boolean);
+  const kept = [];
+  raw.forEach(n => {
+    const low = n.toLowerCase();
+    if (kept.some(u => u.toLowerCase() === low)) return;
+    if (kept.some(u => u.toLowerCase().includes(low) && u.length > n.length)) return;
+    for (let i = kept.length - 1; i >= 0; i--) {
+      if (low.includes(kept[i].toLowerCase()) && n.length > kept[i].length) kept.splice(i, 1);
+    }
+    kept.push(n);
+  });
+  return kept;
+}
+function accessLine(id) {
+  const marked = survey.pins.some(p => p.type === id && p.lat != null);
+  if (!marked && isAbsent(id)) return `<p><strong>${label(id)}:</strong> Not on this site</p>`;
+  const notes = exteriorNotes(id);
+  if (!notes.length) return `<p><strong>${label(id)}:</strong> ${marked ? "Marked, no note" : "Not marked"}</p>`;
+  if (notes.length === 1) return `<p><strong>${label(id)}:</strong> ${esc(notes[0])}</p>`;
+  return `<p><strong>${label(id)}</strong></p><ul class="access">${notes.map(n => `<li>${esc(n)}</li>`).join("")}</ul>`;
+}
 function sheetHtml() {
   const b = survey.building;
   const missing = CRITICAL.filter(gap);
@@ -888,7 +912,7 @@ function sheetHtml() {
     <div class="card"><strong>Occupancy</strong><p>${esc(b.occupancy)} · ${esc(b.stories) || "1"} story<br>Contact: ${esc(b.contactName || b.contact || "Not entered")}${b.contactPhone ? `<br><a href="tel:${esc(b.contactPhone)}" style="color:#e8a317">${esc(b.contactPhone)}</a>` : ""}</p></div>
     <div class="card"><strong>Hazards</strong><p style="color:#e23b3b">${esc(b.hazards) || "None noted"}</p></div>
     <div class="card"><strong>Hydrants</strong><p>${esc(b.hydrants) || "None noted"}</p>${line("hydrant")}</div>
-    <div class="card"><strong>Fastest exterior access</strong>${line("gas")}${line("electric")}${line("knox")}${line("exits")}</div>
+    <div class="card"><strong>Fastest exterior access</strong>${accessLine("gas")}${accessLine("electric")}${accessLine("knox")}${accessLine("exits")}</div>
     <h2>Interior</h2>
     ${survey.plans.length ? survey.plans.map(pl => `<div class="card"><strong>${esc(pl.name)}</strong>
       ${planFrame(pl)}
