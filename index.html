@@ -62,7 +62,21 @@
     margin: 12px 0;
   }
   .success { background: #1a3a1a; border: 1px solid #00ba7c; color: #00ba7c; padding: 12px; border-radius: 8px; margin: 12px 0; }
-  #map, #floorplan-view { height: 320px; border-radius: 12px; margin: 12px 0; background: #1a1d21; position: relative; overflow: hidden; }
+  #map {
+    height: 320px !important;
+    min-height: 320px !important;
+    width: 100% !important;
+    background: #1a1d21;
+    border: 2px solid #1d9bf0;
+    border-radius: 12px;
+    margin: 12px 0;
+    position: relative;
+    z-index: 1;
+  }
+  #map .leaflet-container {
+    height: 100% !important;
+    width: 100% !important;
+  }
   #floorplan-view img { max-width: 100%; max-height: 100%; display: block; margin: 0 auto; }
   .progress { height: 6px; background: #2f3336; border-radius: 3px; margin: 12px 0; }
   .progress-bar { height: 100%; background: #1d9bf0; border-radius: 3px; transition: width 0.3s; }
@@ -515,31 +529,30 @@ function renderPins() {
 }
 
 function initMap() {
-  setTimeout(() => {
+  const tryInit = (attempts = 0) => {
     const mapEl = document.getElementById('map');
-    if (!mapEl) {
-      console.error('Map element not found');
+    if (!mapEl) return;
+
+    // Wait until the container has real dimensions
+    const rect = mapEl.getBoundingClientRect();
+    if ((rect.height < 100 || rect.width < 100) && attempts < 15) {
+      setTimeout(() => tryInit(attempts + 1), 100);
       return;
     }
-
-    // Force visible container
-    mapEl.style.height = '320px';
-    mapEl.style.width = '100%';
-    mapEl.style.display = 'block';
-    mapEl.style.background = '#1a1d21';
-    mapEl.style.border = '1px solid #2f3336';
 
     if (typeof L === 'undefined') {
-      mapEl.innerHTML = '<div style="padding:20px; text-align:center; color:#f4212e;">Map library failed to load.<br><small>Check internet connection and refresh.</small></div>';
+      mapEl.innerHTML = '<div style="padding:20px; text-align:center; color:#f4212e;">Map library failed to load.<br><small>Check connection and refresh.</small></div>';
       return;
     }
 
-    mapEl.innerHTML = '';
+    // Clear any previous map
     if (window.map) {
       try { window.map.remove(); } catch (e) {}
+      window.map = null;
     }
+    mapEl.innerHTML = '';
 
-    const map = L.map(mapEl, { zoomControl: true }).setView([39.13, -89.82], 16);
+    const map = L.map(mapEl, { zoomControl: true, preferCanvas: true }).setView([39.13, -89.82], 16);
 
     const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
       attribution: 'Tiles &copy; Esri',
@@ -555,7 +568,7 @@ function initMap() {
     L.control.layers({ 'Satellite': satellite, 'Streets': streets }).addTo(map);
     window.map = map;
 
-    // Geocode if address exists
+    // Geocode address
     const address = (survey.building.address || '') + (survey.building.name ? ' ' + survey.building.name : '');
     if (address.trim()) {
       fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`)
@@ -586,11 +599,14 @@ function initMap() {
       L.marker([p.lat, p.lng]).addTo(map).bindPopup(`${p.type}: ${p.note || ''}`);
     });
 
-    // Force redraw multiple times for mobile
-    setTimeout(() => { map.invalidateSize(); }, 100);
-    setTimeout(() => { map.invalidateSize(); }, 500);
-    setTimeout(() => { map.invalidateSize(); }, 1000);
-  }, 200);
+    // Multiple redraws for mobile layout
+    const redraw = () => { try { map.invalidateSize(); } catch(e){} };
+    setTimeout(redraw, 50);
+    setTimeout(redraw, 200);
+    setTimeout(redraw, 600);
+  };
+
+  setTimeout(() => tryInit(), 50);
 }
 
 function centerOnMe() {
