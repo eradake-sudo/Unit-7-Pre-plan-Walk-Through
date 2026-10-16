@@ -27,6 +27,7 @@
   .chips button { width: auto; flex: 0 0 auto; border-radius: 4px; padding: 8px 14px; text-transform: none; letter-spacing: 0; }
   #map-wrap, .sheet-map { height: 380px; max-height: 380px; width: 100%; border: 2px solid #c8102e; border-radius: 4px; overflow: hidden; background: #1c1c1c; position: relative; z-index: 1; }
   #map, .sheet-map > div { height: 380px; max-height: 380px; width: 100%; }
+  #map, .leaflet-container { touch-action: none; }
   .leaflet-container { height: 380px !important; max-height: 380px !important; width: 100% !important; overflow: hidden !important; background: #1c1c1c; font: inherit; }
   .leaflet-container img { max-width: none !important; max-height: none !important; }
   .bar { height: 4px; background: #2a2a2a; border-radius: 0; margin: 0 0 16px; }
@@ -310,7 +311,7 @@ function render() {
       <div id="map-wrap"><div id="map"></div></div>
       <p><small id="map-status">Finding the address…</small></p>
       <p><small>Tap the photo to drop a <span id="active-label">${label(active)}</span>.</small></p>
-      <button class="ghost" type="button" onclick="dropGps()">Drop ${label(active)} at my GPS</button>
+      <div class="nav"><button class="ghost" type="button" onclick="dropCenter()">Drop at center</button><button class="ghost" type="button" onclick="dropGps()">Drop at my GPS</button></div>
       <div id="pins"></div>`;
     showPins();
     setTimeout(bootMap, 30);
@@ -472,6 +473,39 @@ function addPin(lat, lng, type) {
   save();
   if (STEPS[step] === "exterior" && map) drawPins();
   showPins();
+}
+function dropAt(lat, lng) {
+  const now = Date.now();
+  if (now - (dropAt.last || 0) < 450) return;
+  dropAt.last = now;
+  addPin(lat, lng);
+  const status = document.getElementById("map-status");
+  if (status) status.textContent = label(active) + " dropped.";
+}
+function dropCenter() {
+  if (!map) return;
+  const c = map.getCenter();
+  dropAt(c.lat, c.lng);
+}
+function bindMapDrop(map, el) {
+  map.on("click", e => dropAt(e.latlng.lat, e.latlng.lng));
+  let start = null;
+  el.addEventListener("touchstart", function (e) {
+    if (e.touches.length !== 1) { start = null; return; }
+    start = { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() };
+  }, { passive: true });
+  el.addEventListener("touchend", function (e) {
+    if (!start || !map || e.changedTouches.length !== 1) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - start.x;
+    const dy = t.clientY - start.y;
+    const dt = Date.now() - start.t;
+    start = null;
+    if (Math.abs(dx) > 16 || Math.abs(dy) > 16 || dt > 700) return;
+    const rect = el.getBoundingClientRect();
+    const ll = map.containerPointToLatLng(L.point(t.clientX - rect.left, t.clientY - rect.top));
+    dropAt(ll.lat, ll.lng);
+  }, { passive: true });
 }
 function patch(id, note, planId) {
   const pin = findPin(id, planId);
@@ -737,10 +771,10 @@ function bootMap() {
   const haveFix = c && c.q && c.q === q;
   const start = haveFix ? [c.lat, c.lng] : [39.28, -89.88];
   const zoom = haveFix ? (c.zoom || 18) : 16;
-  map = L.map(el, { zoomControl: true, maxZoom: 22, zoomSnap: 0.25 }).setView(start, zoom);
+  map = L.map(el, { zoomControl: true, maxZoom: 22, zoomSnap: 0.25, tapTolerance: 30 }).setView(start, zoom);
   L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { attribution: "Tiles © Esri", maxZoom: 22, maxNativeZoom: 19 }).addTo(map);
   pinLayer = L.layerGroup().addTo(map);
-  map.on("click", e => addPin(e.latlng.lat, e.latlng.lng));
+  bindMapDrop(map, el);
   map.on("moveend", rememberView);
   const fix = () => { try { map.invalidateSize(); } catch (e) {} };
   setTimeout(fix, 60); setTimeout(fix, 300); setTimeout(fix, 800);
