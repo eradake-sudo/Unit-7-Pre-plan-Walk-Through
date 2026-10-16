@@ -47,6 +47,8 @@
   .hint strong { color: #f3f5f7; }
   .check { display: flex; align-items: center; gap: 10px; color: #f3f5f7; margin: 8px 0; }
   .check input { width: auto; margin: 0; }
+  button.loc { text-align: left; }
+  button.loc small { display: block; color: #1a1406; font-weight: 600; opacity: 0.75; }
   .detail { background: #212830; border-radius: 10px; padding: 10px; margin-top: 8px; }
 </style>
 </head>
@@ -72,10 +74,15 @@ const CRITICAL = ["gas", "electric", "exits"];
 const INT_IDS = ["hydrant", "sprinkler", "alarm", "detector", "facp", "exits", "knox", "other"];
 const STEPS = ["start", "building", "exterior", "interior", "plan"];
 const KEY = "fd-preplan-pages-v2";
+const LIB = "fd-preplan-library-v1";
 let step = 0;
 let active = "gas";
 let intActive = "facp";
+let library = { activeId: null, locations: [] };
+let readOnly = false;
+let migrated = false;
 let survey = load();
+if (migrated) save();
 shrinkExisting();
 let map, pinLayer, buildingMarker;
 let sheetMaps = [];
@@ -84,28 +91,69 @@ let openDetail = null;
 function blank() {
   return { building: { name: "", address: "", occupancy: "Educational (Group E)", stories: "1", contactName: "", contactPhone: "", hazards: "", hydrants: "", notes: "", center: null }, pins: [], plans: [], absent: {} };
 }
+function normalize(data) {
+  if (!data || !data.building || !Array.isArray(data.pins)) return blank();
+  if (!Array.isArray(data.plans)) data.plans = [];
+  if (!data.building.contactName && data.building.contact) data.building.contactName = data.building.contact;
+  if (!data.building.contactPhone) data.building.contactPhone = "";
+  if (!data.absent) data.absent = {};
+  return data;
+}
 function load() {
   try {
+    const raw = localStorage.getItem(LIB);
+    if (raw) {
+      const data = JSON.parse(raw);
+      if (data && Array.isArray(data.locations)) {
+        library = data;
+        library.locations.forEach(loc => { loc.survey = normalize(loc.survey); });
+        const cur = library.locations.find(l => l.id === library.activeId) || library.locations[0];
+        if (cur) { library.activeId = cur.id; return cur.survey; }
+        return blank();
+      }
+    }
+  } catch (e) {}
+  try {
     const raw = localStorage.getItem(KEY) || localStorage.getItem("fd-preplan-pages-v1");
-    if (!raw) return blank();
-    const data = JSON.parse(raw);
-    if (!data.building || !Array.isArray(data.pins)) return blank();
-    if (!Array.isArray(data.plans)) data.plans = [];
-    if (!data.building.contactName && data.building.contact) data.building.contactName = data.building.contact;
-    if (!data.building.contactPhone) data.building.contactPhone = "";
-    if (!data.absent) data.absent = {};
-    return data;
-  } catch (e) { return blank(); }
+    if (raw) {
+      const old = normalize(JSON.parse(raw));
+      if (old.building.name || old.building.address || old.pins.length || old.plans.length) {
+        const id = uid();
+        library = { activeId: id, locations: [{ id: id, updated: Date.now(), survey: old }] };
+        migrated = true;
+        return old;
+      }
+    }
+  } catch (e) {}
+  return blank();
+}
+function publish() {
+  const has = (survey.building.name || "").trim() || (survey.building.address || "").trim() || survey.pins.length || survey.plans.length;
+  if (!has) return;
+  let loc = library.locations.find(l => l.id === library.activeId);
+  if (!loc) {
+    const id = uid();
+    loc = { id: id, updated: Date.now(), survey: survey };
+    library.locations.unshift(loc);
+    library.activeId = id;
+  } else {
+    loc.survey = survey;
+    loc.updated = Date.now();
+  }
 }
 function save() {
+  publish();
   try {
-    localStorage.setItem(KEY, JSON.stringify(survey));
+    localStorage.setItem(LIB, JSON.stringify(library));
   } catch (e) {
     try {
-      const slim = JSON.parse(JSON.stringify(survey));
-      (slim.pins || []).forEach(p => { delete p.media; });
-      (slim.plans || []).forEach(pl => (pl.pins || []).forEach(p => { delete p.media; }));
-      localStorage.setItem(KEY, JSON.stringify(slim));
+      const slim = JSON.parse(JSON.stringify(library));
+      (slim.locations || []).forEach(loc => {
+        const s = loc.survey || {};
+        (s.pins || []).forEach(p => { delete p.media; });
+        (s.plans || []).forEach(pl => (pl.pins || []).forEach(p => { delete p.media; }));
+      });
+      localStorage.setItem(LIB, JSON.stringify(slim));
     } catch (e2) {}
   }
 }
@@ -128,12 +176,16 @@ function shrinkImage(dataUrl, maxW, quality) {
 }
 function shrinkExisting() {
   const jobs = [];
-  (survey.plans || []).forEach(pl => {
-    if (pl.image && pl.image.length > 400000) jobs.push(shrinkImage(pl.image, 1600, 0.72).then(url => { pl.image = url; }));
-  });
-  const pins = (survey.pins || []).concat((survey.plans || []).flatMap(pl => pl.pins || []));
-  pins.forEach(p => {
-    if (p.media && p.mediaType !== "video" && p.media.length > 180000) jobs.push(shrinkImage(p.media, 800, 0.62).then(url => { p.media = url; }));
+  const surveys = (library.locations || []).map(l => l.survey);
+  if (surveys.indexOf(survey) === -1) surveys.push(survey);
+  surveys.forEach(s => {
+    (s.plans || []).forEach(pl => {
+      if (pl.image && pl.image.length > 400000) jobs.push(shrinkImage(pl.image, 1600, 0.72).then(url => { pl.image = url; }));
+    });
+    const pins = (s.pins || []).concat((s.plans || []).flatMap(pl => pl.pins || []));
+    pins.forEach(p => {
+      if (p.media && p.mediaType !== "video" && p.media.length > 180000) jobs.push(shrinkImage(p.media, 800, 0.62).then(url => { p.media = url; }));
+    });
   });
   if (jobs.length) Promise.all(jobs).then(() => save());
 }
@@ -175,9 +227,18 @@ function render() {
   const s = STEPS[step];
   const b = survey.building;
   if (s === "start") {
-    app.innerHTML = `<h1>Pre-Plan</h1><p>Satellite overhead for the exterior. Upload the paper diagram and pin the interior. Finish with a Quick Action Sheet.</p>
-      <button onclick="fresh()">Start new walkthrough</button>
-      ${b.name ? `<button class="ghost" onclick="go(2)">Continue ${esc(b.name)}</button>` : ""}`;
+    const locs = library.locations.slice().sort((a, b) => (a.survey.building.name || "").localeCompare(b.survey.building.name || ""));
+    app.innerHTML = `<h1>Locations</h1>
+      <p>Tap a building to open its Quick Action Sheet. You can zoom and tap pins. You cannot change them.</p>
+      ${locs.length ? locs.map(loc => {
+        const bld = loc.survey.building;
+        const name = bld.name || bld.address || "Unnamed";
+        return `<div class="card">
+          <button class="loc" onclick="openSheet('${loc.id}')"><strong>${esc(name)}</strong><small>${esc(bld.address || "No address")}</small><small>${esc(bld.occupancy || "")}</small></button>
+          <div class="nav"><button class="ghost" onclick="editLocation('${loc.id}')">Update</button><button class="ghost" onclick="removeLocation('${loc.id}')">Remove</button></div>
+        </div>`;
+      }).join("") : `<p><small>No saved locations on this phone yet.</small></p>`}
+      <button onclick="fresh()">Start new walkthrough</button>`;
   } else if (s === "building") {
     app.innerHTML = `<h1>Building</h1>
       <label>Name</label><input id="name" value="${esc(b.name)}" placeholder="Mt Clare School">
@@ -233,7 +294,40 @@ function chipHtml(interior) {
   return list.map(t => `<button class="${cur === t.id ? "on" : "ghost"}" onclick="setType('${t.id}')">${symbolSvg(t.id, 18)} ${t.label}</button>`).join("");
 }
 
-function fresh() { survey = blank(); save(); go(1); }
+function fresh() {
+  readOnly = false;
+  library.activeId = null;
+  survey = blank();
+  go(1);
+}
+function openSheet(id) {
+  const loc = library.locations.find(l => l.id === id);
+  if (!loc) return;
+  library.activeId = id;
+  survey = loc.survey;
+  readOnly = true;
+  go(4);
+}
+function editLocation(id) {
+  const loc = library.locations.find(l => l.id === id);
+  if (!loc) return;
+  library.activeId = id;
+  survey = loc.survey;
+  readOnly = false;
+  go(1);
+}
+function removeLocation(id) {
+  const loc = library.locations.find(l => l.id === id);
+  const name = (loc && loc.survey.building.name) || "this location";
+  if (!confirm("Remove " + name + " from this phone?")) return;
+  library.locations = library.locations.filter(l => l.id !== id);
+  if (library.activeId === id) {
+    library.activeId = null;
+    survey = blank();
+  }
+  save();
+  render();
+}
 function go(n) {
   step = n;
   if (!Array.isArray(survey.plans)) survey.plans = [];
@@ -281,6 +375,7 @@ function marked(id) {
 }
 function gap(id) { return !isAbsent(id) && !marked(id); }
 function finish() {
+  readOnly = false;
   const missing = CRITICAL.filter(gap);
   if (missing.length && !confirm("Missing: " + missing.map(label).join(", ") + ". Open the sheet anyway?")) return;
   go(4);
@@ -611,7 +706,8 @@ function sheetHtml() {
   };
   return `<h1>Quick Action Sheet</h1>
     <p>${esc(b.name) || "Unnamed"} · ${esc(b.address) || "No address"}</p>
-    ${missing.length ? `<div class="warn">Still missing: ${missing.map(label).join(", ")}</div>` : ""}
+    ${readOnly ? `<p><small>Look only. Zoom the map and the diagrams. Tap a pin to read it.</small></p>` : ""}
+    ${missing.length && !readOnly ? `<div class="warn">Still missing: ${missing.map(label).join(", ")}</div>` : ""}
     <h2>Exterior</h2>
     <div class="sheet-map"><div id="sheet-map"></div></div>
     <div class="card"><strong>Occupancy</strong><p>${esc(b.occupancy)} · ${esc(b.stories) || "1"} story<br>Contact: ${esc(b.contactName || b.contact || "Not entered")}${b.contactPhone ? `<br><a href="tel:${esc(b.contactPhone)}" style="color:#e8a317">${esc(b.contactPhone)}</a>` : ""}</p></div>
@@ -625,7 +721,7 @@ function sheetHtml() {
     </div>`).join("") : `<p><small>No interior diagram uploaded.</small></p>`}
     <div class="card"><strong>Interior</strong>${line("sprinkler")}${line("alarm")}${line("detector")}${line("facp")}<p>${esc(b.notes)}</p></div>
     ${survey.pins.map(p => `<div class="card"><strong>${symbolSvg(p.type, 20)} ${label(p.type)}</strong> — ${esc(p.note) || "No note"}${p.lat != null ? `<br><small>${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}</small>` : ""}${mediaThumb(p)}</div>`).join("")}
-    <div class="nav"><button class="ghost" onclick="go(3)">Back</button><button onclick="window.print()">Save PDF</button></div>`;
+    <div class="nav">${readOnly ? `<button class="ghost" onclick="go(0)">Locations</button>` : `<button class="ghost" onclick="go(3)">Back</button>`}<button onclick="window.print()">Save PDF</button></div>`;
 }
 function bootSheet() {
   survey.plans.forEach(pl => bindPlanGestures(pl.id, false));
@@ -646,7 +742,7 @@ function bootSheet() {
   const located = survey.pins.filter(p => p.lat != null);
   const c = survey.building.center;
   const start = located.length ? [located[0].lat, located[0].lng] : (c ? [c.lat, c.lng] : [39.28, -89.65]);
-  const m = L.map(el, { zoomControl: true, maxZoom: 22, zoomSnap: 0.25 }).setView(start, 18);
+  const m = L.map(el, { zoomControl: true, dragging: true, touchZoom: true, scrollWheelZoom: true, doubleClickZoom: true, boxZoom: false, maxZoom: 22, zoomSnap: 0.25 }).setView(start, 18);
   sheetMaps.push(m);
   L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { attribution: "Tiles © Esri", maxZoom: 22, maxNativeZoom: 19 }).addTo(m);
   const group = [];
