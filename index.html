@@ -68,7 +68,7 @@ let sheetMaps = [];
 let openDetail = null;
 
 function blank() {
-  return { building: { name: "", address: "", occupancy: "Educational (Group E)", stories: "1", contact: "", hazards: "", hydrants: "", notes: "", center: null }, pins: [], plans: [] };
+  return { building: { name: "", address: "", occupancy: "Educational (Group E)", stories: "1", contactName: "", contactPhone: "", hazards: "", hydrants: "", notes: "", center: null }, pins: [], plans: [] };
 }
 function load() {
   try {
@@ -77,6 +77,8 @@ function load() {
     const data = JSON.parse(raw);
     if (!data.building || !Array.isArray(data.pins)) return blank();
     if (!Array.isArray(data.plans)) data.plans = [];
+    if (!data.building.contactName && data.building.contact) data.building.contactName = data.building.contact;
+    if (!data.building.contactPhone) data.building.contactPhone = "";
     return data;
   } catch (e) { return blank(); }
 }
@@ -128,7 +130,8 @@ function render() {
       <label>Address</label><input id="address" value="${esc(b.address)}" placeholder="1022 N High St, Carlinville IL">
       <label>Occupancy</label><select id="occ"><option>Educational (Group E)</option><option>Mercantile</option><option>Business</option><option>Assembly</option><option>Residential</option><option>Industrial</option><option>Other</option></select>
       <label>Stories</label><input id="stories" value="${esc(b.stories || "1")}">
-      <label>Contact</label><input id="contact" value="${esc(b.contact)}" placeholder="Name and phone">
+      <label>Contact name</label><input id="contactName" value="${esc(b.contactName || b.contact || "")}" placeholder="Owner or manager">
+      <label>Phone</label><input id="contactPhone" type="tel" value="${esc(b.contactPhone || "")}" placeholder="(217) 555-0100">
       <label>Hazards</label><textarea id="hazards" rows="2">${esc(b.hazards)}</textarea>
       <label>Hydrant notes</label><textarea id="hydrants" rows="2">${esc(b.hydrants)}</textarea>
       <label>Notes</label><textarea id="notes" rows="2">${esc(b.notes)}</textarea>
@@ -192,7 +195,8 @@ function saveBuilding() {
   if (prev !== b.address) b.center = null;
   b.occupancy = document.getElementById("occ").value;
   b.stories = document.getElementById("stories").value;
-  b.contact = document.getElementById("contact").value;
+  b.contactName = document.getElementById("contactName").value;
+  b.contactPhone = document.getElementById("contactPhone").value;
   b.hazards = document.getElementById("hazards").value;
   b.hydrants = document.getElementById("hydrants").value;
   b.notes = document.getElementById("notes").value;
@@ -399,7 +403,7 @@ function sheetHtml() {
     <h2>Exterior</h2>
     <p><small>Pinch to zoom. Tap a symbol for the note and photo.</small></p>
     <div class="sheet-map"><div id="sheet-map"></div></div>
-    <div class="card"><strong>Occupancy</strong><p>${esc(b.occupancy)} · ${esc(b.stories) || "1"} story<br>Contact: ${esc(b.contact) || "Not entered"}</p></div>
+    <div class="card"><strong>Occupancy</strong><p>${esc(b.occupancy)} · ${esc(b.stories) || "1"} story<br>Contact: ${esc(b.contactName || b.contact || "Not entered")}${b.contactPhone ? `<br><a href="tel:${esc(b.contactPhone)}" style="color:#e8a317">${esc(b.contactPhone)}</a>` : ""}</p></div>
     <div class="card"><strong>Hazards</strong><p style="color:#e23b3b">${esc(b.hazards) || "None noted"}</p></div>
     <div class="card"><strong>Hydrants</strong><p>${esc(b.hydrants) || "None noted"}</p>${line("hydrant")}</div>
     <div class="card"><strong>Fastest exterior access</strong>${line("gas")}${line("electric")}${line("knox")}${line("exits")}</div>
