@@ -22,9 +22,10 @@
   .nav { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
   .chips button { width: auto; flex: 0 0 auto; border-radius: 999px; padding: 8px 14px; }
-  #map-wrap, .sheet-map { height: 380px; width: 100%; border: 2px solid #e8a317; border-radius: 14px; overflow: hidden; background: #171c21; }
-  #map, .sheet-map > div { height: 100%; width: 100%; }
-  .leaflet-container { height: 100% !important; width: 100% !important; background: #171c21; font: inherit; }
+  #map-wrap, .sheet-map { height: 380px; max-height: 380px; width: 100%; border: 2px solid #e8a317; border-radius: 14px; overflow: hidden; background: #171c21; position: relative; z-index: 1; }
+  #map, .sheet-map > div { height: 380px; max-height: 380px; width: 100%; }
+  .leaflet-container { height: 380px !important; max-height: 380px !important; width: 100% !important; overflow: hidden !important; background: #171c21; font: inherit; }
+  .nav { position: relative; z-index: 5; }
   .leaflet-container img { max-width: none !important; max-height: none !important; }
   .bar { height: 4px; background: #212830; border-radius: 4px; margin: 10px 0 16px; }
   .bar > div { height: 100%; background: #e8a317; width: 0; }
@@ -82,7 +83,18 @@ function load() {
     return data;
   } catch (e) { return blank(); }
 }
-function save() { localStorage.setItem(KEY, JSON.stringify(survey)); }
+function save() {
+  try {
+    localStorage.setItem(KEY, JSON.stringify(survey));
+  } catch (e) {
+    try {
+      const slim = JSON.parse(JSON.stringify(survey));
+      (slim.pins || []).forEach(p => { delete p.media; });
+      (slim.plans || []).forEach(pl => { delete pl.image; (pl.pins || []).forEach(p => { delete p.media; }); });
+      localStorage.setItem(KEY, JSON.stringify(slim));
+    } catch (e2) {}
+  }
+}
 function typeOf(id) { return TYPES.find(t => t.id === id) || TYPES[TYPES.length - 1]; }
 function label(id) { return typeOf(id).label; }
 function uid() { return Math.random().toString(36).slice(2, 10); }
@@ -139,13 +151,13 @@ function render() {
     document.getElementById("occ").value = b.occupancy || "Educational (Group E)";
   } else if (s === "exterior") {
     app.innerHTML = `<h1>Exterior</h1>
+      <div class="nav"><button class="ghost" onclick="go(1)">Back</button><button type="button" onclick="go(3)">Interior</button></div>
       <p>Pick the item, then tap the satellite photo. Write the side of the building so crews do not come in the wrong way.</p>
       <div class="chips" id="chips">${chipHtml(false)}</div>
       <div id="map-wrap"><div id="map"></div></div>
       <p><small>Tap the photo to drop a <span id="active-label">${label(active)}</span> marker. Switching items does not move the map.</small></p>
-      <button class="ghost" onclick="dropGps()">Drop ${label(active)} at my GPS</button>
-      <div id="pins"></div>
-      <div class="nav"><button class="ghost" onclick="go(1)">Back</button><button onclick="go(3)">Interior</button></div>`;
+      <button class="ghost" type="button" onclick="dropGps()">Drop ${label(active)} at my GPS</button>
+      <div id="pins"></div>`;
     showPins();
     setTimeout(bootMap, 30);
   } else if (s === "interior") {
@@ -176,7 +188,17 @@ function chipHtml(interior) {
 }
 
 function fresh() { survey = blank(); save(); go(1); }
-function go(n) { step = n; save(); render(); }
+function go(n) {
+  step = n;
+  if (!Array.isArray(survey.plans)) survey.plans = [];
+  if (!Array.isArray(survey.pins)) survey.pins = [];
+  try { render(); }
+  catch (err) {
+    const app = document.getElementById("app");
+    if (app) app.innerHTML = `<h1>Could not open that step</h1><p>${esc(err && err.message)}</p><div class="nav"><button type="button" onclick="go(2)">Back to map</button></div>`;
+  }
+  save();
+}
 function setType(id) {
   active = id;
   const chips = document.getElementById("chips");
