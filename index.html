@@ -33,8 +33,11 @@
   .shot { width: 100%; border-radius: 10px; margin-top: 8px; }
   .row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
   small { color: #9aa3ad; }
-  .plan-box { position: relative; width: 100%; border: 2px solid #e8a317; border-radius: 14px; overflow: hidden; background: #0e1114; margin: 8px 0; }
-  .plan-box img.plan { width: 100%; display: block; }
+  .plan-view { position: relative; width: 100%; height: 440px; overflow: hidden; touch-action: none; border: 2px solid #e8a317; border-radius: 14px; background: #0e1114; margin: 8px 0; }
+  .plan-stage { position: absolute; left: 0; top: 0; width: 100%; transform-origin: 0 0; }
+  .plan-stage img.plan { width: 100%; display: block; pointer-events: none; user-select: none; }
+  .zrow { display: flex; gap: 8px; }
+  .zrow button { width: auto; flex: 1; padding: 10px; margin: 0; }
   .plan-pin { position: absolute; transform: translate(-50%, -100%); cursor: pointer; z-index: 2; }
   .sym { display: block; filter: drop-shadow(0 1px 2px rgba(0,0,0,.7)); }
   .hint { background: #212830; border-radius: 12px; padding: 12px; color: #c5cdd5; font-size: 0.95rem; }
@@ -155,7 +158,7 @@ function render() {
       <p>Pick the item, then tap the satellite photo. Write the side of the building so crews do not come in the wrong way.</p>
       <div class="chips" id="chips">${chipHtml(false)}</div>
       <div id="map-wrap"><div id="map"></div></div>
-      <p><small>Tap the photo to drop a <span id="active-label">${label(active)}</span> marker. Switching items does not move the map.</small></p>
+      <p><small>Tap the photo to drop a <span id="active-label">${label(active)}</span>.</small></p>
       <button class="ghost" type="button" onclick="dropGps()">Drop ${label(active)} at my GPS</button>
       <div id="pins"></div>`;
     showPins();
@@ -321,26 +324,125 @@ function addPlan(input) {
   };
   reader.readAsDataURL(file);
 }
-function dropOnPlan(planId, event) {
-  const img = event.currentTarget;
-  const box = img.getBoundingClientRect();
-  const x = ((event.clientX - box.left) / box.width) * 100;
-  const y = ((event.clientY - box.top) / box.height) * 100;
+function dropOnPlan(planId, clientX, clientY) {
+  const view = document.getElementById("view-" + planId);
+  const stage = document.getElementById("stage-" + planId);
+  if (!view || !stage) return;
+  const v = viewOf(planId);
+  const r = view.getBoundingClientRect();
+  const x = ((clientX - r.left - v.x) / v.s) / stage.offsetWidth * 100;
+  const y = ((clientY - r.top - v.y) / v.s) / stage.offsetHeight * 100;
+  if (x < 0 || y < 0 || x > 100 || y > 100) return;
   const plan = survey.plans.find(p => p.id === planId);
   if (!plan) return;
   plan.pins.push({ id: uid(), type: intActive, note: "", x, y });
   save();
   showPlans();
 }
+const planViews = {};
+function viewOf(id) {
+  if (!planViews[id]) planViews[id] = { s: 1, x: 0, y: 0 };
+  return planViews[id];
+}
+function applyPlanView(id) {
+  const st = document.getElementById("stage-" + id);
+  if (!st) return;
+  const v = viewOf(id);
+  st.style.transform = "translate(" + v.x + "px," + v.y + "px) scale(" + v.s + ")";
+}
+function zoomPlan(id, dir) {
+  const view = document.getElementById("view-" + id);
+  const v = viewOf(id);
+  const next = Math.min(6, Math.max(1, +(v.s * (dir > 0 ? 1.35 : 1 / 1.35)).toFixed(3)));
+  if (!view) { v.s = next; return; }
+  const r = view.getBoundingClientRect();
+  const cx = r.width / 2, cy = r.height / 2;
+  const ix = (cx - v.x) / v.s, iy = (cy - v.y) / v.s;
+  v.s = next;
+  v.x = next <= 1.02 ? 0 : cx - ix * next;
+  v.y = next <= 1.02 ? 0 : cy - iy * next;
+  if (v.s <= 1.02) v.s = 1;
+  applyPlanView(id);
+}
+function resetPlan(id) {
+  planViews[id] = { s: 1, x: 0, y: 0 };
+  applyPlanView(id);
+}
+function planFrame(pl) {
+  return `<div class="zrow">
+      <button class="ghost" type="button" onclick="zoomPlan('${pl.id}', -1)">−</button>
+      <button class="ghost" type="button" onclick="zoomPlan('${pl.id}', 1)">+</button>
+      <button class="ghost" type="button" onclick="resetPlan('${pl.id}')">Fit</button>
+    </div>
+    <div class="plan-view" id="view-${pl.id}">
+      <div class="plan-stage" id="stage-${pl.id}">${planPins(pl)}<img class="plan" src="${pl.image}" alt="" draggable="false"></div>
+    </div>`;
+}
+function bindPlanGestures(id, editable) {
+  const view = document.getElementById("view-" + id);
+  if (!view || view.dataset.bound) return;
+  view.dataset.bound = "1";
+  applyPlanView(id);
+  const pointers = new Map();
+  let start = null, moved = false, pinch0 = 0, base = null;
+  function pts() { return Array.from(pointers.values()); }
+  view.addEventListener("pointerdown", function (e) {
+    if (e.target.closest && e.target.closest(".plan-pin")) return;
+    view.setPointerCapture(e.pointerId);
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    moved = false;
+    const v = viewOf(id);
+    if (pointers.size === 1) start = { x: e.clientX, y: e.clientY, vx: v.x, vy: v.y };
+    if (pointers.size === 2) {
+      const a = pts()[0], b = pts()[1];
+      pinch0 = Math.hypot(a.x - b.x, a.y - b.y) || 1;
+      base = { s: v.s, x: v.x, y: v.y };
+    }
+  });
+  view.addEventListener("pointermove", function (e) {
+    if (!pointers.has(e.pointerId)) return;
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const v = viewOf(id);
+    if (pointers.size === 1 && start && v.s > 1) {
+      const dx = e.clientX - start.x, dy = e.clientY - start.y;
+      if (Math.hypot(dx, dy) > 8) moved = true;
+      if (moved) { v.x = start.vx + dx; v.y = start.vy + dy; applyPlanView(id); }
+    } else if (pointers.size === 2 && base) {
+      const a = pts()[0], b = pts()[1];
+      const d = Math.hypot(a.x - b.x, a.y - b.y) || 1;
+      const r = view.getBoundingClientRect();
+      const cx = (a.x + b.x) / 2 - r.left, cy = (a.y + b.y) / 2 - r.top;
+      const ns = Math.min(6, Math.max(1, base.s * (d / pinch0)));
+      v.s = ns;
+      v.x = cx - ((cx - base.x) / base.s) * ns;
+      v.y = cy - ((cy - base.y) / base.s) * ns;
+      if (v.s <= 1.02) { v.s = 1; v.x = 0; v.y = 0; }
+      applyPlanView(id);
+      moved = true;
+    } else if (pointers.size === 1 && start) {
+      if (Math.hypot(e.clientX - start.x, e.clientY - start.y) > 8) moved = true;
+    }
+  });
+  function up(e) {
+    const tap = pointers.size === 1 && start && !moved;
+    pointers.delete(e.pointerId);
+    if (tap && editable) dropOnPlan(id, e.clientX, e.clientY);
+    if (!pointers.size) start = null;
+    if (pointers.size < 2) { pinch0 = 0; base = null; }
+  }
+  view.addEventListener("pointerup", up);
+  view.addEventListener("pointercancel", up);
+}
 function showPlans() {
   const el = document.getElementById("plans");
   if (!el) return;
   el.innerHTML = survey.plans.length ? survey.plans.map(pl => `<div class="card">
       <div class="row"><strong>${esc(pl.name)}</strong><button class="ghost" style="width:auto;padding:8px 12px" onclick="removePlan('${pl.id}')">Remove plan</button></div>
-      <p><small>Tap the diagram to drop a ${label(intActive)}.</small></p>
-      <div class="plan-box">${planPins(pl)}<img class="plan" src="${pl.image}" alt="" onclick="dropOnPlan('${pl.id}', event)"></div>
+      <p><small>Pinch or use + to zoom, then tap to drop a ${label(intActive)}.</small></p>
+      ${planFrame(pl)}
       ${pl.pins.map(p => pinCard(p, pl.id)).join("")}
     </div>`).join("") : `<p><small>No floor plan yet. Photograph the paper diagram and upload it.</small></p>`;
+  survey.plans.forEach(pl => bindPlanGestures(pl.id, true));
 }
 function planPins(pl) {
   return pl.pins.map(p => `<span class="plan-pin" style="left:${p.x}%;top:${p.y}%" onclick="event.stopPropagation();openPin('${p.id}','${pl.id}')">${symbolSvg(p.type, 28)}</span>`).join("");
@@ -365,8 +467,8 @@ function bootMap() {
   const c = survey.building.center;
   const start = c ? [c.lat, c.lng] : [39.28, -89.65];
   const zoom = c ? (c.zoom || 18) : 16;
-  map = L.map(el, { zoomControl: true }).setView(start, zoom);
-  L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { attribution: "Tiles © Esri", maxZoom: 19 }).addTo(map);
+  map = L.map(el, { zoomControl: true, maxZoom: 22, zoomSnap: 0.25 }).setView(start, zoom);
+  L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { attribution: "Tiles © Esri", maxZoom: 22, maxNativeZoom: 19 }).addTo(map);
   pinLayer = L.layerGroup().addTo(map);
   map.on("click", e => addPin(e.latlng.lat, e.latlng.lng));
   map.on("moveend", rememberView);
@@ -423,7 +525,6 @@ function sheetHtml() {
     <p>${esc(b.name) || "Unnamed"} · ${esc(b.address) || "No address"}</p>
     ${missing.length ? `<div class="warn">Still missing: ${missing.map(label).join(", ")}</div>` : ""}
     <h2>Exterior</h2>
-    <p><small>Pinch to zoom. Tap a symbol for the note and photo.</small></p>
     <div class="sheet-map"><div id="sheet-map"></div></div>
     <div class="card"><strong>Occupancy</strong><p>${esc(b.occupancy)} · ${esc(b.stories) || "1"} story<br>Contact: ${esc(b.contactName || b.contact || "Not entered")}${b.contactPhone ? `<br><a href="tel:${esc(b.contactPhone)}" style="color:#e8a317">${esc(b.contactPhone)}</a>` : ""}</p></div>
     <div class="card"><strong>Hazards</strong><p style="color:#e23b3b">${esc(b.hazards) || "None noted"}</p></div>
@@ -431,47 +532,45 @@ function sheetHtml() {
     <div class="card"><strong>Fastest exterior access</strong>${line("gas")}${line("electric")}${line("knox")}${line("exits")}</div>
     <h2>Interior</h2>
     ${survey.plans.length ? survey.plans.map(pl => `<div class="card"><strong>${esc(pl.name)}</strong>
-      <p><small>Tap a symbol for the note.</small></p>
-      <div class="plan-box" id="sheet-plan-${pl.id}">${planPins(pl)}<img class="plan" src="${pl.image}" alt=""></div>
+      ${planFrame(pl)}
       <div id="sheet-detail-${pl.id}"></div>
     </div>`).join("") : `<p><small>No interior diagram uploaded.</small></p>`}
     <div class="card"><strong>Interior notes</strong>${line("facp")}<p>${esc(b.notes)}</p></div>
     ${survey.pins.map(p => `<div class="card"><strong>${symbolSvg(p.type, 20)} ${label(p.type)}</strong> — ${esc(p.note) || "No note"}${p.lat != null ? `<br><small>${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}</small>` : ""}${p.media && p.mediaType !== "video" ? `<img class="shot" src="${p.media}" alt="">` : ""}</div>`).join("")}
-    <div class="nav"><button class="ghost" onclick="go(3)">Back</button><button onclick="window.print()">Save PDF</button></div>
-    <p><small>On iPhone, Save PDF opens the share sheet. Choose Save to Files. Symbols follow common fire-service pre-plan labels (NFPA 170 style).</small></p>`;
+    <div class="nav"><button class="ghost" onclick="go(3)">Back</button><button onclick="window.print()">Save PDF</button></div>`;
 }
 function bootSheet() {
+  survey.plans.forEach(pl => bindPlanGestures(pl.id, false));
+  survey.plans.forEach(pl => {
+    const nodes = document.querySelectorAll("#view-" + pl.id + " .plan-pin");
+    nodes.forEach((node, i) => {
+      const p = pl.pins[i];
+      if (!p) return;
+      node.onclick = (e) => {
+        e.stopPropagation();
+        const box = document.getElementById("sheet-detail-" + pl.id);
+        if (box) box.innerHTML = `<div class="detail"><strong>${label(p.type)}</strong><p>${esc(p.note) || "No note"}</p>${p.media && p.mediaType !== "video" ? `<img class="shot" src="${p.media}" alt="">` : ""}</div>`;
+      };
+    });
+  });
   const el = document.getElementById("sheet-map");
   if (!el || typeof L === "undefined") return;
   const located = survey.pins.filter(p => p.lat != null);
   const c = survey.building.center;
   const start = located.length ? [located[0].lat, located[0].lng] : (c ? [c.lat, c.lng] : [39.28, -89.65]);
-  const m = L.map(el, { zoomControl: true }).setView(start, 18);
+  const m = L.map(el, { zoomControl: true, maxZoom: 22, zoomSnap: 0.25 }).setView(start, 18);
   sheetMaps.push(m);
-  L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { attribution: "Tiles © Esri", maxZoom: 19 }).addTo(m);
+  L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { attribution: "Tiles © Esri", maxZoom: 22, maxNativeZoom: 19 }).addTo(m);
   const group = [];
   survey.pins.forEach(p => {
     if (p.lat == null) return;
     const mk = L.marker([p.lat, p.lng], { icon: icon(p.type) }).addTo(m).bindPopup(popupHtml(p));
     group.push(mk);
   });
-  if (group.length) m.fitBounds(L.featureGroup(group).getBounds().pad(0.25));
+  if (group.length > 1) m.fitBounds(L.featureGroup(group).getBounds().pad(0.25), { maxZoom: 19 });
+  else if (group.length === 1) m.setView(group[0].getLatLng(), 19);
   const fix = () => { try { m.invalidateSize(); } catch (e) {} };
   setTimeout(fix, 80); setTimeout(fix, 400);
-  survey.plans.forEach(pl => {
-    pl.pins.forEach(p => {
-      const nodes = document.querySelectorAll("#sheet-plan-" + pl.id + " .plan-pin");
-      nodes.forEach((node, i) => {
-        if (pl.pins[i] && pl.pins[i].id === p.id) {
-          node.onclick = (e) => {
-            e.stopPropagation();
-            const box = document.getElementById("sheet-detail-" + pl.id);
-            if (box) box.innerHTML = `<div class="detail"><strong>${label(p.type)}</strong><p>${esc(p.note) || "No note"}</p>${p.media && p.mediaType !== "video" ? `<img class="shot" src="${p.media}" alt="">` : ""}</div>`;
-          };
-        }
-      });
-    });
-  });
 }
 render();
 </script>
