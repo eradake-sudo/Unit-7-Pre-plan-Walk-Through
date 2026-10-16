@@ -16,7 +16,7 @@
   h1 { font-size: 1.45rem; margin: 0 0 12px; letter-spacing: 0.08em; text-transform: uppercase; border-left: 4px solid #c8102e; padding-left: 10px; }
   h2 { font-size: 0.95rem; margin: 22px 0 8px; letter-spacing: 0.14em; text-transform: uppercase; color: #f4f4f4; }
   p { color: #b7b7b7; }
-  button { width: 100%; background: #f0b429; color: #1a1406; border: 0; border-radius: 4px; padding: 16px; font-size: 1rem; font-weight: 800; margin: 6px 0; letter-spacing: 0.04em; text-transform: uppercase; }
+  button { width: 100%; background: #f0b429; color: #1a1406; border: 0; border-radius: 4px; padding: 16px; font-size: 1rem; font-weight: 800; margin: 6px 0; letter-spacing: 0.04em; text-transform: uppercase; touch-action: manipulation; }
   button.ghost { background: #1e1e1e; color: #f4f4f4; border: 1px solid #3a3a3a; }
   button.on { outline: 2px solid #f0b429; }
   input, select, textarea { width: 100%; margin: 4px 0 12px; padding: 12px; border-radius: 4px; border: 1px solid #3a3a3a; background: #0e0e0e; color: #f4f4f4; font-size: 1rem; }
@@ -286,6 +286,7 @@ function render() {
       <p><small id="dept-status">${esc(deptMessage)}</small></p>`;
   } else if (s === "building") {
     app.innerHTML = `<h1>Building</h1>
+      <form id="bform" onsubmit="event.preventDefault(); saveBuilding(); return false;">
       <label>Name</label><input id="name" value="${esc(b.name)}">
       <label>Address</label><input id="address" value="${esc(b.address)}">
       <label>Occupancy</label><select id="occ"><option value=""></option><option>Educational (Group E)</option><option>Mercantile</option><option>Business</option><option>Assembly</option><option>Residential</option><option>Industrial</option><option>Other</option></select>
@@ -296,8 +297,11 @@ function render() {
       <label>Hazards</label><textarea id="hazards" rows="2">${esc(b.hazards)}</textarea>
       <label>Hydrant notes</label><textarea id="hydrants" rows="2">${esc(b.hydrants)}</textarea>
       <label>Notes</label><textarea id="notes" rows="2">${esc(b.notes)}</textarea>
-      <div class="nav"><button class="ghost" onclick="go(0)">Back</button><button onclick="saveBuilding()">Exterior map</button></div>`;
+      <div class="nav"><button class="ghost" type="button" onclick="go(0)">Back</button><button type="submit">Next</button></div>
+      </form>`;
     document.getElementById("occ").value = b.occupancy || "";
+    const nextBtn = document.querySelector("#bform button[type=submit]");
+    if (nextBtn) nextBtn.addEventListener("touchend", function (e) { e.preventDefault(); saveBuilding(); });
   } else if (s === "exterior") {
     app.innerHTML = `<h1>Exterior</h1>
       <div class="nav"><button class="ghost" onclick="go(1)">Back</button><button type="button" onclick="go(3)">Interior</button></div>
@@ -419,21 +423,30 @@ function setType(id) {
   if (gps) gps.textContent = "Drop " + label(id) + " at my GPS";
 }
 function setIntType(id) { intActive = id; render(); }
+function field(id) {
+  const el = document.getElementById(id);
+  return el ? el.value : "";
+}
 function saveBuilding() {
-  const b = survey.building;
-  const prev = b.address;
-  b.name = document.getElementById("name").value;
-  b.address = document.getElementById("address").value;
-  if (prev !== b.address) b.center = null;
-  b.occupancy = document.getElementById("occ").value;
-  b.stories = document.getElementById("stories").value;
-  b.lastInspected = document.getElementById("inspected").value || todayISO();
-  b.contactName = document.getElementById("contactName").value;
-  b.contactPhone = document.getElementById("contactPhone").value;
-  b.hazards = document.getElementById("hazards").value;
-  b.hydrants = document.getElementById("hydrants").value;
-  b.notes = document.getElementById("notes").value;
-  save(); go(2);
+  if (step !== 1) return;
+  if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+  try {
+    const b = survey.building;
+    const prev = b.address;
+    b.name = field("name");
+    b.address = field("address");
+    if (prev !== b.address) b.center = null;
+    b.occupancy = field("occ");
+    b.stories = field("stories");
+    b.lastInspected = field("inspected") || todayISO();
+    b.contactName = field("contactName");
+    b.contactPhone = field("contactPhone");
+    b.hazards = field("hazards");
+    b.hydrants = field("hydrants");
+    b.notes = field("notes");
+    save();
+  } catch (err) {}
+  go(2);
 }
 function isAbsent(id) { return !!(survey.absent && survey.absent[id]); }
 function toggleAbsent(id, on) {
