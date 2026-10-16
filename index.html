@@ -29,6 +29,7 @@
   #map, .sheet-map > div { height: 380px; max-height: 380px; width: 100%; }
   #map, .leaflet-container { touch-action: none; }
   .leaflet-container { height: 380px !important; max-height: 380px !important; width: 100% !important; overflow: hidden !important; background: #1c1c1c; font: inherit; }
+  .leaflet-div-icon.pin-icon { background: none; border: 0; }
   .leaflet-container img { max-width: none !important; max-height: none !important; }
   .bar { height: 4px; background: #2a2a2a; border-radius: 0; margin: 0 0 16px; }
   .bar > div { height: 100%; background: #c8102e; width: 0; }
@@ -242,7 +243,7 @@ function symbolSvg(id, size) {
   </svg>`;
 }
 function icon(id) {
-  return L.divIcon({ className: "", html: symbolSvg(id, 32), iconSize: [32, 32], iconAnchor: [16, 32], popupAnchor: [0, -28] });
+  return L.divIcon({ className: "pin-icon", html: symbolSvg(id, 36), iconSize: [36, 36], iconAnchor: [18, 36], popupAnchor: [0, -32] });
 }
 
 function killMaps() {
@@ -306,13 +307,8 @@ function render() {
   } else if (s === "exterior") {
     app.innerHTML = `<h1>Exterior</h1>
       <div class="nav"><button class="ghost" type="button" onclick="go(1)">Back</button><button type="button" onclick="go(3)">Next</button></div>
-      <p>Pick the item, then tap the satellite photo. Write the side of the building so crews do not come in the wrong way.</p>
       <div class="chips" id="chips">${chipHtml(false)}</div>
       <div id="map-wrap"><div id="map"></div></div>
-      <p><small id="map-status">Finding the address…</small></p>
-      <button type="button" onclick="goToPhone()">My location</button>
-      <p><small>Tap the photo to drop a <span id="active-label">${label(active)}</span>.</small></p>
-      <div class="nav"><button class="ghost" type="button" onclick="dropCenter()">Drop at center</button></div>
       <div id="pins"></div>`;
     showPins();
     setTimeout(bootMap, 30);
@@ -420,8 +416,6 @@ function setType(id) {
   active = id;
   const chips = document.getElementById("chips");
   if (chips) chips.innerHTML = chipHtml(false);
-  const lab = document.getElementById("active-label");
-  if (lab) lab.textContent = label(id);
 }
 function setIntType(id) { intActive = id; render(); }
 function field(id) {
@@ -475,36 +469,29 @@ function addPin(lat, lng, type) {
 }
 function dropAt(lat, lng) {
   const now = Date.now();
-  if (now - (dropAt.last || 0) < 450) return;
+  if (now - (dropAt.last || 0) < 350) return;
   dropAt.last = now;
   addPin(lat, lng);
-  const status = document.getElementById("map-status");
-  if (status) status.textContent = label(active) + " dropped.";
 }
-function dropCenter() {
-  if (!map) return;
-  const c = map.getCenter();
-  dropAt(c.lat, c.lng);
-}
-function bindMapDrop(map, el) {
-  map.on("click", e => dropAt(e.latlng.lat, e.latlng.lng));
-  let start = null;
-  el.addEventListener("touchstart", function (e) {
-    if (e.touches.length !== 1) { start = null; return; }
-    start = { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() };
-  }, { passive: true });
-  el.addEventListener("touchend", function (e) {
-    if (!start || !map || e.changedTouches.length !== 1) return;
-    const t = e.changedTouches[0];
-    const dx = t.clientX - start.x;
-    const dy = t.clientY - start.y;
-    const dt = Date.now() - start.t;
-    start = null;
-    if (Math.abs(dx) > 16 || Math.abs(dy) > 16 || dt > 700) return;
-    const rect = el.getBoundingClientRect();
-    const ll = map.containerPointToLatLng(L.point(t.clientX - rect.left, t.clientY - rect.top));
+function bindMapDrop(map) {
+  const box = map.getContainer();
+  map.on("click", function (e) { dropAt(e.latlng.lat, e.latlng.lng); });
+  let down = null;
+  box.addEventListener("pointerdown", function (e) {
+    if (e.target && e.target.closest && e.target.closest(".leaflet-control")) return;
+    down = { x: e.clientX, y: e.clientY, t: Date.now() };
+  }, true);
+  box.addEventListener("pointerup", function (e) {
+    if (!down || !map) return;
+    if (e.target && e.target.closest && e.target.closest(".leaflet-control")) { down = null; return; }
+    const dx = e.clientX - down.x;
+    const dy = e.clientY - down.y;
+    const dt = Date.now() - down.t;
+    down = null;
+    if (Math.abs(dx) > 48 || Math.abs(dy) > 48 || dt > 900) return;
+    const ll = map.mouseEventToLatLng(e);
     dropAt(ll.lat, ll.lng);
-  }, { passive: true });
+  }, true);
 }
 function patch(id, note, planId) {
   const pin = findPin(id, planId);
@@ -560,9 +547,7 @@ function photo(id, input, planId) {
   reader.readAsDataURL(file);
 }
 function goToPhone() {
-  const status = document.getElementById("map-status");
-  if (!navigator.geolocation) { alert("GPS is not available on this device."); return; }
-  if (status && !status.textContent) status.textContent = "Getting the phone location…";
+  if (!navigator.geolocation) return;
   navigator.geolocation.getCurrentPosition(
     pos => {
       if (!map) return;
@@ -570,12 +555,8 @@ function goToPhone() {
       const c = survey.building.center;
       if (q && c && c.q === q) return;
       map.setView([pos.coords.latitude, pos.coords.longitude], 19);
-      if (status && !(q && c && c.q === q)) status.textContent = "Phone location";
     },
-    () => {
-      if (status) status.textContent = "Location was denied.";
-      alert("Location was denied. Allow location for this site, then tap My location again.");
-    },
+    function () {},
     { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
   );
 }
@@ -584,7 +565,7 @@ function showPins() {
   const el = document.getElementById("pins");
   if (!el) return;
   const list = STEPS[step] === "interior" ? [] : survey.pins;
-  el.innerHTML = list.length ? list.map(p => pinCard(p)).join("") : (STEPS[step] === "exterior" ? `<p><small>No markers yet.</small></p>` : "");
+  el.innerHTML = list.length ? list.map(p => pinCard(p)).join("") : "";
 }
 function mediaThumb(p, planId) {
   if (!p.media) return "";
@@ -785,18 +766,15 @@ function bootMap() {
   map = L.map(el, { zoomControl: true, maxZoom: 22, zoomSnap: 0.25, tapTolerance: 30 }).setView(start, zoom);
   L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { attribution: "Tiles © Esri", maxZoom: 22, maxNativeZoom: 19 }).addTo(map);
   pinLayer = L.layerGroup().addTo(map);
-  bindMapDrop(map, el);
+  bindMapDrop(map);
   map.on("moveend", rememberView);
   const fix = () => { try { map.invalidateSize(); } catch (e) {} };
   setTimeout(fix, 60); setTimeout(fix, 300); setTimeout(fix, 800);
   if (window.ResizeObserver) new ResizeObserver(fix).observe(el.parentElement);
   drawPins();
-  const status = document.getElementById("map-status");
-  if (haveFix) { if (status) status.textContent = q; }
-  else {
+  if (!haveFix) {
     goToPhone();
     if (q) flyAddress();
-    else if (status) status.textContent = "Getting the phone location…";
   }
 }
 function rememberView() {
@@ -809,9 +787,7 @@ function rememberView() {
 let geocodeToken = 0;
 function flyAddress() {
   const q = (survey.building.address || "").trim();
-  const status = document.getElementById("map-status");
-  if (q.length < 4) { if (status) status.textContent = "Address is too short to find."; return; }
-  if (status) status.textContent = "Finding " + q + "…";
+  if (q.length < 4) return;
   const token = ++geocodeToken;
   const arc = "https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates?f=json&maxLocations=1&countryCode=USA&location=-89.82,39.13&distance=120000&SingleLine=" + encodeURIComponent(q);
   fetch(arc)
@@ -820,26 +796,22 @@ function flyAddress() {
       const hit = data.candidates && data.candidates[0];
       const loc = hit && hit.location;
       if (!loc) throw new Error("none");
-      return { lat: loc.y, lng: loc.x, label: hit.address || q };
+      return { lat: loc.y, lng: loc.x };
     })
     .catch(() => fetch("https://photon.komoot.io/api/?limit=1&q=" + encodeURIComponent(q))
       .then(r => r.json())
       .then(data => {
         const f = data.features && data.features[0];
         if (!f) throw new Error("none");
-        return { lat: f.geometry.coordinates[1], lng: f.geometry.coordinates[0], label: q };
+        return { lat: f.geometry.coordinates[1], lng: f.geometry.coordinates[0] };
       }))
     .then(hit => {
       if (token !== geocodeToken || !map) return;
       survey.building.center = { lat: hit.lat, lng: hit.lng, zoom: 18, q: q };
       save();
       map.setView([hit.lat, hit.lng], 18);
-      if (status) status.textContent = hit.label;
     })
-    .catch(() => {
-      if (token !== geocodeToken) return;
-      if (status) status.textContent = "Couldn't find that address. Check it, or pan the map.";
-    });
+    .catch(function () {});
 }
 function drawPins() {
   if (!pinLayer) return;
