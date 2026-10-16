@@ -193,6 +193,12 @@ function shrinkExisting() {
 }
 function typeOf(id) { return TYPES.find(t => t.id === id) || TYPES[TYPES.length - 1]; }
 function label(id) { return typeOf(id).label; }
+function todayISO() {
+  const d = new Date();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return d.getFullYear() + "-" + m + "-" + day;
+}
 function tourInfo(dateStr) {
   if (!dateStr) return { due: true, text: "No inspection date" };
   const d = new Date(dateStr + "T00:00:00");
@@ -202,7 +208,7 @@ function tourInfo(dateStr) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const pretty = d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-  return { due: today >= dueOn, text: "Last inspected " + pretty };
+  return { due: today >= dueOn, text: "Inspection date " + pretty };
 }
 function tourFlag(dateStr) {
   const info = tourInfo(dateStr);
@@ -276,7 +282,7 @@ function render() {
       <label>Address</label><input id="address" value="${esc(b.address)}" placeholder="1022 N High St, Carlinville IL">
       <label>Occupancy</label><select id="occ"><option>Educational (Group E)</option><option>Mercantile</option><option>Business</option><option>Assembly</option><option>Residential</option><option>Industrial</option><option>Other</option></select>
       <label>Stories</label><input id="stories" value="${esc(b.stories || "1")}">
-      <label>Last inspected</label><input id="inspected" type="date" value="${esc(b.lastInspected || "")}">
+      <label>Inspection date</label><input id="inspected" type="date" value="${esc(todayISO())}">
       <label>Contact name</label><input id="contactName" value="${esc(b.contactName || b.contact || "")}" placeholder="Owner or manager">
       <label>Phone</label><input id="contactPhone" type="tel" value="${esc(b.contactPhone || "")}" placeholder="(217) 555-0100">
       <label>Hazards</label><textarea id="hazards" rows="2">${esc(b.hazards)}</textarea>
@@ -402,7 +408,7 @@ function saveBuilding() {
   if (prev !== b.address) b.center = null;
   b.occupancy = document.getElementById("occ").value;
   b.stories = document.getElementById("stories").value;
-  b.lastInspected = document.getElementById("inspected").value;
+  b.lastInspected = document.getElementById("inspected").value || todayISO();
   b.contactName = document.getElementById("contactName").value;
   b.contactPhone = document.getElementById("contactPhone").value;
   b.hazards = document.getElementById("hazards").value;
@@ -424,7 +430,7 @@ function finish() {
   readOnly = false;
   const missing = CRITICAL.filter(gap);
   if (missing.length && !confirm("Missing: " + missing.map(label).join(", ") + ". Open the sheet anyway?")) return;
-  survey.building.lastInspected = new Date().toISOString().slice(0, 10);
+  if (!survey.building.lastInspected) survey.building.lastInspected = todayISO();
   go(4);
 }
 
