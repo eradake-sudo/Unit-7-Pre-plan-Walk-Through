@@ -319,7 +319,6 @@ function pinCard(p, planId) {
     <div class="row"><strong>${symbolSvg(p.type, 22)} ${label(p.type)}</strong>
     <button class="ghost" style="width:auto;padding:8px 12px" onclick="removePin('${p.id}'${planId ? ",'" + planId + "'" : ""})">Remove</button></div>
     ${p.lat != null ? `<small>${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}</small>` : ""}
-    ${p.x != null ? `<small>${Math.round(p.x)}% across, ${Math.round(p.y)}% down</small>` : ""}
     <input value="${esc(p.note)}" placeholder="Side of building, room, wall, access" oninput="patch('${p.id}', this.value${planId ? ",'" + planId + "'" : ""})">
     <label class="ghost" style="display:block;text-align:center;background:#212830;border-radius:10px;padding:10px;font-weight:700">Add photo
       <input type="file" accept="image/*,video/*" capture="environment" style="display:none" onchange="photo('${p.id}', this${planId ? ",'" + planId + "'" : ""})">
