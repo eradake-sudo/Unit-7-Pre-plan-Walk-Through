@@ -258,10 +258,11 @@ function render() {
         const name = bld.name || bld.address || "Unnamed";
         return `<div class="card">
           <button class="loc" onclick="openSheet('${loc.id}')"><strong>${esc(name)}</strong><small>${esc(bld.address || "No address")}</small><small>${esc(bld.occupancy || "")}</small></button>
+          ${loc.shared ? `<p><small>Department list</small></p>` : `<p><small>This phone only</small></p>`}
           ${tourFlag(bld.lastInspected)}
           <div class="nav"><button class="ghost" onclick="editLocation('${loc.id}')">Update</button><button class="ghost" onclick="removeLocation('${loc.id}')">Remove</button></div>
         </div>`;
-      }).join("") : `<p><small>No saved locations on this phone yet.</small></p>`}
+      }).join("") : `<p><small>Nothing on the department list or this phone yet.</small></p>`}
       <button onclick="fresh()">Start new walkthrough</button>`;
   } else if (s === "building") {
     app.innerHTML = `<h1>Building</h1>
@@ -345,6 +346,13 @@ function removeLocation(id) {
   const loc = library.locations.find(l => l.id === id);
   const name = (loc && loc.survey.building.name) || "this location";
   if (!confirm("Remove " + name + " from this phone?")) return;
+  if (loc && loc.shared) {
+    try {
+      const ids = JSON.parse(localStorage.getItem("fd-preplan-hidden-shared") || "[]");
+      if (ids.indexOf(id) === -1) ids.push(id);
+      localStorage.setItem("fd-preplan-hidden-shared", JSON.stringify(ids));
+    } catch (e) {}
+  }
   if (id === "demo-tour") {
     try { localStorage.setItem("fd-preplan-demo-off", "1"); } catch (e) {}
   }
@@ -862,14 +870,46 @@ function demoSurvey() {
     }]
   };
 }
+function sharedHidden(id) {
+  try {
+    if (id === "demo-tour" && localStorage.getItem("fd-preplan-demo-off")) return true;
+    const ids = JSON.parse(localStorage.getItem("fd-preplan-hidden-shared") || "[]");
+    return ids.indexOf(id) !== -1;
+  } catch (e) { return false; }
+}
+function hydrateShared(loc) {
+  loc.shared = true;
+  loc.survey = normalize(loc.survey);
+  (loc.survey.plans || []).forEach(pl => {
+    if (!pl.image || pl.image === "demo") pl.image = demoPlanImage();
+  });
+  return loc;
+}
+function loadShared() {
+  fetch("locations.json?t=" + Date.now(), { cache: "no-store" })
+    .then(r => r.ok ? r.json() : null)
+    .then(data => {
+      if (!data || !Array.isArray(data.locations)) return;
+      data.locations.forEach(loc => {
+        if (!loc || !loc.id || sharedHidden(loc.id)) return;
+        const ready = hydrateShared(loc);
+        const i = library.locations.findIndex(l => l.id === loc.id);
+        if (i === -1) library.locations.push(ready);
+        else library.locations[i] = ready;
+      });
+      if (step === 0) render();
+    })
+    .catch(() => {});
+}
 function ensureDemo() {
-  try { if (localStorage.getItem("fd-preplan-demo-off")) return; } catch (e) { return; }
+  if (sharedHidden("demo-tour")) return;
   if (library.locations.some(l => l.id === "demo-tour")) return;
-  library.locations.unshift({ id: "demo-tour", updated: Date.now(), survey: demoSurvey() });
+  library.locations.unshift({ id: "demo-tour", updated: Date.now(), shared: true, survey: demoSurvey() });
   save();
 }
-ensureDemo();
+try { ensureDemo(); } catch (e) {}
 render();
+loadShared();
 </script>
 </body>
 </html>
