@@ -332,8 +332,8 @@ function render() {
       <h1>Exterior – Map & GPS</h1>
       <p>The map opens in satellite view centered on the address you entered. Use “My Location” to jump to your GPS, or tap the map to drop pins. Switch layers (top right) between Satellite and Streets if needed.</p>
       <button onclick="centerOnMe()">📍 My Location (GPS)</button>
-      <div id="map" style="height:320px; background:#1a1d21; border:1px solid #2f3336; border-radius:12px; margin:12px 0; display:flex; align-items:center; justify-content:center; color:#71767b;">
-        Loading map…
+      <div id="map" style="height:320px; width:100%; background:#1a1d21; border:2px solid #1d9bf0; border-radius:12px; margin:12px 0; display:flex; align-items:center; justify-content:center; color:#71767b;">
+        Map loading…
       </div>
       <div class="card">
         <h2>What to look for & mark</h2>
@@ -517,17 +517,29 @@ function renderPins() {
 function initMap() {
   setTimeout(() => {
     const mapEl = document.getElementById('map');
-    if (!mapEl) return;
-
-    if (typeof L === 'undefined') {
-      mapEl.innerHTML = '<div style="padding:20px; text-align:center;">Map library failed to load.<br><small>Open this file in Safari (not the Files preview) and make sure you have internet. Or use the Mark buttons below — they still capture GPS.</small></div>';
+    if (!mapEl) {
+      console.error('Map element not found');
       return;
     }
 
-    mapEl.innerHTML = ''; // clear loading text
-    if (window.map) { try { window.map.remove(); } catch(e){} }
+    // Force visible container
+    mapEl.style.height = '320px';
+    mapEl.style.width = '100%';
+    mapEl.style.display = 'block';
+    mapEl.style.background = '#1a1d21';
+    mapEl.style.border = '1px solid #2f3336';
 
-    const map = L.map(mapEl).setView([39.13, -89.82], 16);
+    if (typeof L === 'undefined') {
+      mapEl.innerHTML = '<div style="padding:20px; text-align:center; color:#f4212e;">Map library failed to load.<br><small>Check internet connection and refresh.</small></div>';
+      return;
+    }
+
+    mapEl.innerHTML = '';
+    if (window.map) {
+      try { window.map.remove(); } catch (e) {}
+    }
+
+    const map = L.map(mapEl, { zoomControl: true }).setView([39.13, -89.82], 16);
 
     const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
       attribution: 'Tiles &copy; Esri',
@@ -543,6 +555,7 @@ function initMap() {
     L.control.layers({ 'Satellite': satellite, 'Streets': streets }).addTo(map);
     window.map = map;
 
+    // Geocode if address exists
     const address = (survey.building.address || '') + (survey.building.name ? ' ' + survey.building.name : '');
     if (address.trim()) {
       fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`)
@@ -573,15 +586,21 @@ function initMap() {
       L.marker([p.lat, p.lng]).addTo(map).bindPopup(`${p.type}: ${p.note || ''}`);
     });
 
-    setTimeout(() => map.invalidateSize(), 200);
-  }, 150);
+    // Force redraw multiple times for mobile
+    setTimeout(() => { map.invalidateSize(); }, 100);
+    setTimeout(() => { map.invalidateSize(); }, 500);
+    setTimeout(() => { map.invalidateSize(); }, 1000);
+  }, 200);
 }
 
 function centerOnMe() {
   getCurrentLocation((lat, lng) => {
     if (window.map) {
       window.map.setView([lat, lng], 18);
-      L.circleMarker([lat, lng], { radius: 8, color: '#1d9bf0' }).addTo(window.map).bindPopup('You are here');
+      L.circleMarker([lat, lng], { radius: 8, color: '#1d9bf0', fillOpacity: 0.8 }).addTo(window.map).bindPopup('You are here').openPopup();
+      setTimeout(() => window.map.invalidateSize(), 100);
+    } else {
+      alert('Map not ready. Scroll up — the map box should be under the My Location button.');
     }
   });
 }
