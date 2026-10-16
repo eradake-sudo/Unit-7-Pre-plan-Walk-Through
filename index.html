@@ -100,6 +100,7 @@ let readOnly = false;
 let migrated = false;
 let deptMessage = "";
 let updating = false;
+let listQuery = "";
 let survey = load();
 if (migrated) save();
 shrinkExisting();
@@ -286,18 +287,12 @@ function render() {
     app.innerHTML = `<button onclick="fresh()">Start new walkthrough</button>
       <button class="ghost" onclick="showUpdateList()">Update walkthrough</button>
       <h2>Locations</h2>
+      <input id="locsearch" type="search" placeholder="Business or address" autocomplete="off" enterkeyhint="search" value="${esc(listQuery)}" oninput="listQuery=this.value;paintLocations()">
       ${dueCount ? `<div class="warn">${dueCount} ${dueCount === 1 ? "business is" : "businesses are"} due for a 5-year tour.</div>` : ""}
-      ${locs.length ? locs.map(loc => {
-        const bld = loc.survey.building;
-        const name = bld.name || bld.address || "Unnamed";
-        return `<div class="card">
-          <button class="loc" onclick="openSheet('${loc.id}')"><strong>${esc(name)}</strong><small>${esc(bld.address || "No address")}</small><small>${esc(bld.occupancy || "")}</small></button>
-          ${tourFlag(bld.lastInspected)}
-          <button class="ghost" onclick="removeLocation('${loc.id}')">Remove</button>
-        </div>`;
-      }).join("") : `<p><small>No locations yet.</small></p>`}
+      <div id="loc-list"></div>
       ${deptToken() ? "" : `<input id="deptkey" type="password" placeholder="Key" autocomplete="off"><button class="ghost" onclick="saveDeptKey()">Save key on this phone</button>`}
       <p><small id="dept-status">${esc(deptMessage)}</small></p>`;
+    paintLocations();
   } else if (s === "building") {
     app.innerHTML = `<h1>Building</h1>
       <form id="bform" onsubmit="event.preventDefault(); saveBuilding(); return false;">
@@ -362,6 +357,24 @@ function sortedLocations() {
     if (ad !== bd) return ad - bd;
     return (a.survey.building.name || "").localeCompare(b.survey.building.name || "");
   });
+}
+function paintLocations() {
+  const el = document.getElementById("loc-list");
+  if (!el) return;
+  const q = listQuery.trim().toLowerCase();
+  const locs = sortedLocations().filter(loc => {
+    if (!q) return true;
+    const bld = loc.survey.building || {};
+    return [bld.name, bld.address, bld.occupancy].join(" ").toLowerCase().indexOf(q) !== -1;
+  });
+  el.innerHTML = locs.length ? locs.map(loc => {
+    const bld = loc.survey.building;
+    const name = bld.name || bld.address || "Unnamed";
+    return `<div class="card">
+      <button class="loc" onclick="openSheet('${loc.id}')"><strong>${esc(name)}</strong><small>${esc(bld.address || "No address")}</small><small>${esc(bld.occupancy || "")}</small></button>
+      ${tourFlag(bld.lastInspected)}
+    </div>`;
+  }).join("") : `<p><small>${q ? "No match." : "No locations yet."}</small></p>`;
 }
 function showUpdateList() { updating = true; render(); }
 function cancelUpdate() { updating = false; render(); }
@@ -1086,7 +1099,11 @@ function pullDepartment() {
     .then(() => {
       save();
       setDeptStatus(deptToken() ? "This phone can publish updates." : "Add the key on this phone to publish updates.");
-      if (step === 0 && !(document.activeElement && document.activeElement.id === "deptkey")) render();
+      if (step === 0) {
+        const box = document.activeElement;
+        if (box && (box.id === "deptkey" || box.id === "locsearch")) paintLocations();
+        else render();
+      }
     })
     .catch(() => {
       setDeptStatus("Couldn't reach shared sheets. Showing what's on this phone.");
