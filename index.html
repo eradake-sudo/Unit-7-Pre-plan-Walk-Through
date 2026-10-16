@@ -8,52 +8,58 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
   * { box-sizing: border-box; }
-  body { margin: 0; background: #0e1114; color: #f3f5f7; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  body { margin: 0; background: #121212; color: #f4f4f4; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  .mast { display: flex; align-items: center; gap: 12px; background: #1a1a1a; border-bottom: 5px solid #c8102e; padding: 14px 16px; }
+  .mast strong { display: block; letter-spacing: 0.16em; font-size: 1.15rem; }
+  .mast small { letter-spacing: 0.18em; text-transform: uppercase; }
   .wrap { max-width: 540px; margin: 0 auto; padding: 16px 16px 48px; }
-  h1 { font-size: 1.55rem; margin: 0 0 6px; letter-spacing: 0.02em; text-transform: uppercase; }
-  h2 { font-size: 1.05rem; margin: 18px 0 8px; }
-  p { color: #9aa3ad; }
-  button { width: 100%; background: #e8a317; color: #1a1406; border: 0; border-radius: 12px; padding: 14px; font-size: 1rem; font-weight: 700; margin: 6px 0; }
-  button.ghost { background: #212830; color: #f3f5f7; }
-  button.on { outline: 2px solid #f3f5f7; }
-  input, select, textarea { width: 100%; margin: 4px 0 12px; padding: 12px; border-radius: 12px; border: 1px solid #2c353e; background: #0e1114; color: #f3f5f7; font-size: 1rem; }
-  label { color: #9aa3ad; font-size: 0.9rem; }
-  .card { background: #171c21; border: 1px solid #2c353e; border-radius: 14px; padding: 14px; margin: 12px 0; }
-  .nav { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  h1 { font-size: 1.45rem; margin: 0 0 12px; letter-spacing: 0.08em; text-transform: uppercase; border-left: 4px solid #c8102e; padding-left: 10px; }
+  h2 { font-size: 0.95rem; margin: 22px 0 8px; letter-spacing: 0.14em; text-transform: uppercase; color: #f4f4f4; }
+  p { color: #b7b7b7; }
+  button { width: 100%; background: #f0b429; color: #1a1406; border: 0; border-radius: 4px; padding: 16px; font-size: 1rem; font-weight: 800; margin: 6px 0; letter-spacing: 0.04em; text-transform: uppercase; }
+  button.ghost { background: #1e1e1e; color: #f4f4f4; border: 1px solid #3a3a3a; }
+  button.on { outline: 2px solid #f0b429; }
+  input, select, textarea { width: 100%; margin: 4px 0 12px; padding: 12px; border-radius: 4px; border: 1px solid #3a3a3a; background: #0e0e0e; color: #f4f4f4; font-size: 1rem; }
+  label { color: #b7b7b7; font-size: 0.85rem; letter-spacing: 0.06em; text-transform: uppercase; }
+  .card { background: #1c1c1c; border: 1px solid #333; border-left: 4px solid #c8102e; border-radius: 4px; padding: 14px; margin: 12px 0; }
+  .nav { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; position: relative; z-index: 5; }
   .chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
-  .chips button { width: auto; flex: 0 0 auto; border-radius: 999px; padding: 8px 14px; }
-  #map-wrap, .sheet-map { height: 380px; max-height: 380px; width: 100%; border: 2px solid #e8a317; border-radius: 14px; overflow: hidden; background: #171c21; position: relative; z-index: 1; }
+  .chips button { width: auto; flex: 0 0 auto; border-radius: 4px; padding: 8px 14px; text-transform: none; letter-spacing: 0; }
+  #map-wrap, .sheet-map { height: 380px; max-height: 380px; width: 100%; border: 2px solid #c8102e; border-radius: 4px; overflow: hidden; background: #1c1c1c; position: relative; z-index: 1; }
   #map, .sheet-map > div { height: 380px; max-height: 380px; width: 100%; }
-  .leaflet-container { height: 380px !important; max-height: 380px !important; width: 100% !important; overflow: hidden !important; background: #171c21; font: inherit; }
-  .nav { position: relative; z-index: 5; }
+  .leaflet-container { height: 380px !important; max-height: 380px !important; width: 100% !important; overflow: hidden !important; background: #1c1c1c; font: inherit; }
   .leaflet-container img { max-width: none !important; max-height: none !important; }
-  .bar { height: 4px; background: #212830; border-radius: 4px; margin: 10px 0 16px; }
-  .bar > div { height: 100%; background: #e8a317; width: 0; }
-  .warn { border: 1px solid #e23b3b; color: #e23b3b; border-radius: 12px; padding: 12px; }
-  .flag { color: #e23b3b; font-weight: 700; margin: 8px 0; }
-  .thumb { width: 72px; height: 72px; object-fit: cover; border-radius: 8px; margin-top: 8px; display: block; cursor: pointer; }
+  .bar { height: 4px; background: #2a2a2a; border-radius: 0; margin: 0 0 16px; }
+  .bar > div { height: 100%; background: #c8102e; width: 0; }
+  .warn { border: 1px solid #c8102e; color: #ff6b6b; border-radius: 4px; padding: 12px; background: #2a1212; }
+  .flag { color: #ff6b6b; font-weight: 800; margin: 8px 0; letter-spacing: 0.04em; text-transform: uppercase; }
+  .thumb { width: 72px; height: 72px; object-fit: cover; border-radius: 4px; margin-top: 8px; display: block; cursor: pointer; }
   .lightbox { position: fixed; inset: 0; z-index: 5000; background: rgba(0,0,0,.92); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; }
-  .lightbox img, .lightbox video { max-width: 100%; max-height: 68vh; object-fit: contain; border-radius: 10px; }
-  .lightbox p { color: #f3f5f7; text-align: center; max-width: 420px; }
+  .lightbox img, .lightbox video { max-width: 100%; max-height: 68vh; object-fit: contain; border-radius: 4px; }
+  .lightbox p { color: #f4f4f4; text-align: center; max-width: 420px; }
   .row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-  small { color: #9aa3ad; }
-  .plan-view { position: relative; width: 100%; height: 440px; overflow: hidden; touch-action: none; border: 2px solid #e8a317; border-radius: 14px; background: #0e1114; margin: 8px 0; }
+  small { color: #b7b7b7; }
+  .plan-view { position: relative; width: 100%; height: 440px; overflow: hidden; touch-action: none; border: 2px solid #c8102e; border-radius: 4px; background: #0e0e0e; margin: 8px 0; }
   .plan-stage { position: absolute; left: 0; top: 0; width: 100%; transform-origin: 0 0; }
   .plan-stage img.plan { width: 100%; display: block; pointer-events: none; user-select: none; }
   .zrow { display: flex; gap: 8px; }
   .zrow button { width: auto; flex: 1; padding: 10px; margin: 0; }
   .plan-pin { position: absolute; transform: translate(-50%, -100%); cursor: pointer; z-index: 2; }
   .sym { display: block; filter: drop-shadow(0 1px 2px rgba(0,0,0,.7)); }
-  .hint { background: #212830; border-radius: 12px; padding: 12px; color: #c5cdd5; font-size: 0.95rem; }
-  .hint strong { color: #f3f5f7; }
-  .check { display: flex; align-items: center; gap: 10px; color: #f3f5f7; margin: 8px 0; }
+  .hint { background: #1c1c1c; border-left: 4px solid #f0b429; border-radius: 4px; padding: 12px; color: #d0d0d0; font-size: 0.95rem; }
+  .hint strong { color: #f4f4f4; }
+  .check { display: flex; align-items: center; gap: 10px; color: #f4f4f4; margin: 8px 0; }
   .check input { width: auto; margin: 0; }
-  button.loc { text-align: left; }
-  button.loc small { display: block; color: #1a1406; font-weight: 600; opacity: 0.75; }
-  .detail { background: #212830; border-radius: 10px; padding: 10px; margin-top: 8px; }
+  button.loc { text-align: left; text-transform: none; letter-spacing: 0; }
+  button.loc small { display: block; color: #1a1406; font-weight: 700; opacity: 0.8; }
+  .detail { background: #242424; border-radius: 4px; padding: 10px; margin-top: 8px; }
 </style>
 </head>
 <body>
+<header class="mast">
+  <svg width="36" height="36" viewBox="0 0 36 36" aria-hidden="true"><path fill="#c8102e" d="M18 2l4 8h8l-6.5 5 2.5 8L18 18l-8 5 2.5-8L6 10h8z"/></svg>
+  <div><strong>PRE-PLAN</strong><small>Walkthrough</small></div>
+</header>
 <div class="wrap">
   <div class="bar"><div id="bar"></div></div>
   <div id="app"></div>
@@ -82,7 +88,8 @@ let intActive = "facp";
 let library = { activeId: null, locations: [] };
 let readOnly = false;
 let migrated = false;
-let deptMessage = "Checking the department list…";
+let deptMessage = "";
+let updating = false;
 let survey = load();
 if (migrated) save();
 shrinkExisting();
@@ -91,7 +98,7 @@ let sheetMaps = [];
 let openDetail = null;
 
 function blank() {
-  return { building: { name: "", address: "", occupancy: "Educational (Group E)", stories: "1", contactName: "", contactPhone: "", hazards: "", hydrants: "", notes: "", center: null }, pins: [], plans: [], absent: {} };
+  return { building: { name: "", address: "", occupancy: "", stories: "", contactName: "", contactPhone: "", hazards: "", hydrants: "", notes: "", center: null }, pins: [], plans: [], absent: {} };
 }
 function normalize(data) {
   if (!data || !data.building || !Array.isArray(data.pins)) return blank();
@@ -250,45 +257,47 @@ function render() {
   const s = STEPS[step];
   const b = survey.building;
   if (s === "start") {
-    const locs = library.locations.slice().sort((a, b) => {
-      const ad = tourInfo(a.survey.building.lastInspected).due ? 0 : 1;
-      const bd = tourInfo(b.survey.building.lastInspected).due ? 0 : 1;
-      if (ad !== bd) return ad - bd;
-      return (a.survey.building.name || "").localeCompare(b.survey.building.name || "");
-    });
+    const locs = sortedLocations();
     const dueCount = locs.filter(loc => tourInfo(loc.survey.building.lastInspected).due).length;
-    app.innerHTML = `<h1>Locations</h1>
-      <div class="card">
-        <strong>Department list</strong>
-        <p id="dept-status"><small>${esc(deptMessage)}</small></p>
-        ${deptToken() ? "" : `<input id="deptkey" type="password" placeholder="Department key" autocomplete="off"><button class="ghost" onclick="saveDeptKey()">Save key on this phone</button>`}
-      </div>
+    if (updating) {
+      app.innerHTML = `<h1>Update</h1>
+        ${locs.length ? locs.map(loc => {
+          const bld = loc.survey.building;
+          const name = bld.name || bld.address || "Unnamed";
+          return `<button class="loc" onclick="beginUpdate('${loc.id}')"><strong>${esc(name)}</strong><small>${esc(bld.address || "No address")}</small></button>`;
+        }).join("") : `<p><small>No walkthroughs yet.</small></p>`}
+        <button class="ghost" onclick="cancelUpdate()">Back</button>`;
+      return;
+    }
+    app.innerHTML = `<button onclick="fresh()">Start new walkthrough</button>
+      <button class="ghost" onclick="showUpdateList()">Update walkthrough</button>
+      <h2>Locations</h2>
       ${dueCount ? `<div class="warn">${dueCount} ${dueCount === 1 ? "business is" : "businesses are"} due for a 5-year tour.</div>` : ""}
       ${locs.length ? locs.map(loc => {
         const bld = loc.survey.building;
         const name = bld.name || bld.address || "Unnamed";
         return `<div class="card">
           <button class="loc" onclick="openSheet('${loc.id}')"><strong>${esc(name)}</strong><small>${esc(bld.address || "No address")}</small><small>${esc(bld.occupancy || "")}</small></button>
-          ${loc.shared ? `<p><small>Department list</small></p>` : `<p><small>This phone only</small></p>`}
           ${tourFlag(bld.lastInspected)}
-          <div class="nav"><button class="ghost" onclick="editLocation('${loc.id}')">Update</button><button class="ghost" onclick="removeLocation('${loc.id}')">Remove</button></div>
+          <button class="ghost" onclick="removeLocation('${loc.id}')">Remove</button>
         </div>`;
-      }).join("") : `<p><small>Nothing on the department list or this phone yet.</small></p>`}
-      <button onclick="fresh()">Start new walkthrough</button>`;
+      }).join("") : `<p><small>No locations yet.</small></p>`}
+      ${deptToken() ? "" : `<input id="deptkey" type="password" placeholder="Key" autocomplete="off"><button class="ghost" onclick="saveDeptKey()">Save key on this phone</button>`}
+      <p><small id="dept-status">${esc(deptMessage)}</small></p>`;
   } else if (s === "building") {
     app.innerHTML = `<h1>Building</h1>
-      <label>Name</label><input id="name" value="${esc(b.name)}" placeholder="Mt Clare School">
-      <label>Address</label><input id="address" value="${esc(b.address)}" placeholder="1022 N High St, Carlinville IL">
-      <label>Occupancy</label><select id="occ"><option>Educational (Group E)</option><option>Mercantile</option><option>Business</option><option>Assembly</option><option>Residential</option><option>Industrial</option><option>Other</option></select>
-      <label>Stories</label><input id="stories" value="${esc(b.stories || "1")}">
+      <label>Name</label><input id="name" value="${esc(b.name)}">
+      <label>Address</label><input id="address" value="${esc(b.address)}">
+      <label>Occupancy</label><select id="occ"><option value=""></option><option>Educational (Group E)</option><option>Mercantile</option><option>Business</option><option>Assembly</option><option>Residential</option><option>Industrial</option><option>Other</option></select>
+      <label>Stories</label><input id="stories" value="${esc(b.stories || "")}">
       <label>Inspection date</label><input id="inspected" type="date" value="${esc(todayISO())}">
-      <label>Contact name</label><input id="contactName" value="${esc(b.contactName || b.contact || "")}" placeholder="Owner or manager">
-      <label>Phone</label><input id="contactPhone" type="tel" value="${esc(b.contactPhone || "")}" placeholder="(217) 555-0100">
+      <label>Contact name</label><input id="contactName" value="${esc(b.contactName || b.contact || "")}">
+      <label>Phone</label><input id="contactPhone" type="tel" value="${esc(b.contactPhone || "")}">
       <label>Hazards</label><textarea id="hazards" rows="2">${esc(b.hazards)}</textarea>
       <label>Hydrant notes</label><textarea id="hydrants" rows="2">${esc(b.hydrants)}</textarea>
       <label>Notes</label><textarea id="notes" rows="2">${esc(b.notes)}</textarea>
       <div class="nav"><button class="ghost" onclick="go(0)">Back</button><button onclick="saveBuilding()">Exterior map</button></div>`;
-    document.getElementById("occ").value = b.occupancy || "Educational (Group E)";
+    document.getElementById("occ").value = b.occupancy || "";
   } else if (s === "exterior") {
     app.innerHTML = `<h1>Exterior</h1>
       <div class="nav"><button class="ghost" onclick="go(1)">Back</button><button type="button" onclick="go(3)">Interior</button></div>
@@ -331,6 +340,17 @@ function chipHtml(interior) {
   return list.map(t => `<button class="${cur === t.id ? "on" : "ghost"}" onclick="setType('${t.id}')">${symbolSvg(t.id, 18)} ${t.label}</button>`).join("");
 }
 
+function sortedLocations() {
+  return library.locations.slice().sort((a, b) => {
+    const ad = tourInfo(a.survey.building.lastInspected).due ? 0 : 1;
+    const bd = tourInfo(b.survey.building.lastInspected).due ? 0 : 1;
+    if (ad !== bd) return ad - bd;
+    return (a.survey.building.name || "").localeCompare(b.survey.building.name || "");
+  });
+}
+function showUpdateList() { updating = true; render(); }
+function cancelUpdate() { updating = false; render(); }
+function beginUpdate(id) { updating = false; editLocation(id); }
 function fresh() {
   readOnly = false;
   library.activeId = null;
@@ -429,7 +449,7 @@ function finish() {
   readOnly = false;
   const missing = CRITICAL.filter(gap);
   if (missing.length && !confirm("Missing: " + missing.map(label).join(", ") + ". Open the sheet anyway?")) return;
-  if (!survey.building.lastInspected) survey.building.lastInspected = todayISO();
+  survey.building.lastInspected = todayISO();
   go(4);
 }
 
@@ -759,7 +779,6 @@ function sheetHtml() {
   return `<h1>Quick Action Sheet</h1>
     <p>${esc(b.name) || "Unnamed"} · ${esc(b.address) || "No address"}</p>
     ${tourFlag(b.lastInspected)}
-    ${readOnly ? `<p><small>Look only. Zoom the map and the diagrams. Tap a pin to read it.</small></p>` : ""}
     ${missing.length && !readOnly ? `<div class="warn">Still missing: ${missing.map(label).join(", ")}</div>` : ""}
     <h2>Exterior</h2>
     <div class="sheet-map"><div id="sheet-map"></div></div>
@@ -914,7 +933,7 @@ function saveDeptKey() {
   const v = el ? el.value.trim() : "";
   if (!v) return;
   localStorage.setItem("fd-preplan-token", v);
-  deptMessage = "Key saved on this phone. Checking the department list…";
+  deptMessage = "Key saved on this phone.";
   pullDepartment();
 }
 function ghHeaders() {
@@ -976,11 +995,11 @@ function pullDepartment() {
     })
     .then(() => {
       save();
-      setDeptStatus(deptToken() ? "Department list is live. This phone can update it." : "Department list loaded. Add the key on this phone to publish changes.");
+      setDeptStatus(deptToken() ? "This phone can publish updates." : "Add the key on this phone to publish updates.");
       if (step === 0 && !(document.activeElement && document.activeElement.id === "deptkey")) render();
     })
     .catch(() => {
-      setDeptStatus("Couldn't reach the department list. Showing what's on this phone.");
+      setDeptStatus("Couldn't reach shared sheets. Showing what's on this phone.");
     })
     .then(() => { pulling = false; });
 }
@@ -1015,7 +1034,7 @@ function pushLocation(loc) {
     loc.shared = true;
     loc.updated = copy.updated;
     save();
-    setDeptStatus("Shared with the department.");
+    setDeptStatus("Shared.");
   }).catch(err => {
     setDeptStatus("Could not share: " + (err && err.message ? err.message : "failed"));
   });
