@@ -82,6 +82,7 @@ let intActive = "facp";
 let library = { activeId: null, locations: [] };
 let readOnly = false;
 let migrated = false;
+let deptMessage = "Checking the department list…";
 let survey = load();
 if (migrated) save();
 shrinkExisting();
@@ -252,6 +253,11 @@ function render() {
     const dueCount = locs.filter(loc => tourInfo(loc.survey.building.lastInspected).due).length;
     app.innerHTML = `<h1>Locations</h1>
       <p>Tap a building to open its Quick Action Sheet. You can zoom and tap pins. You cannot change them.</p>
+      <div class="card">
+        <strong>Department list</strong>
+        <p id="dept-status"><small>${esc(deptMessage)}</small></p>
+        ${deptToken() ? "" : `<input id="deptkey" type="password" placeholder="Department key" autocomplete="off"><button class="ghost" onclick="saveDeptKey()">Save key on this phone</button>`}
+      </div>
       ${dueCount ? `<div class="warn">${dueCount} ${dueCount === 1 ? "business is" : "businesses are"} due for a 5-year tour.</div>` : ""}
       ${locs.length ? locs.map(loc => {
         const bld = loc.survey.building;
@@ -345,7 +351,8 @@ function editLocation(id) {
 function removeLocation(id) {
   const loc = library.locations.find(l => l.id === id);
   const name = (loc && loc.survey.building.name) || "this location";
-  if (!confirm("Remove " + name + " from this phone?")) return;
+  if (!confirm((deptToken() ? "Remove " + name + " from the department list? Every phone will lose it." : "Remove " + name + " from this phone? It will come back from the department list until this phone has the key."))) return;
+  deleteRemote(id);
   if (loc && loc.shared) {
     try {
       const ids = JSON.parse(localStorage.getItem("fd-preplan-hidden-shared") || "[]");
@@ -365,6 +372,7 @@ function removeLocation(id) {
   render();
 }
 function go(n) {
+  const prev = step;
   step = n;
   if (!Array.isArray(survey.plans)) survey.plans = [];
   if (!Array.isArray(survey.pins)) survey.pins = [];
@@ -374,6 +382,7 @@ function go(n) {
     if (app) app.innerHTML = `<h1>Could not open that step</h1><p>${esc(err && err.message)}</p><div class="nav"><button type="button" onclick="go(2)">Back to map</button></div>`;
   }
   save();
+  if ((prev === 1 || prev === 2 || prev === 3) && prev !== n) pushActive();
 }
 function setType(id) {
   active = id;
@@ -885,19 +894,149 @@ function hydrateShared(loc) {
   });
   return loc;
 }
-function loadShared() {
-  fetch("locations.json?t=" + Date.now(), { cache: "no-store" })
+const GH_OWNER = "eradake-sudo";
+const GH_REPO = "Unit-7-Pre-plan-Walk-Through";
+const GH_DIR = "data/locations";
+function deptToken() {
+  try {
+    const old = JSON.parse(localStorage.getItem("ghConfig") || "{}");
+    if (old && old.token) return String(old.token).trim();
+  } catch (e) {}
+  try { return (localStorage.getItem("fd-preplan-token") || "").trim(); } catch (e) { return ""; }
+}
+function saveDeptKey() {
+  const el = document.getElementById("deptkey");
+  const v = el ? el.value.trim() : "";
+  if (!v) return;
+  localStorage.setItem("fd-preplan-token", v);
+  deptMessage = "Key saved on this phone. Checking the department list…";
+  pullDepartment();
+}
+function ghHeaders() {
+  const headers = { Accept: "application/vnd.github+json" };
+  const t = deptToken();
+  if (t) headers.Authorization = "Bearer " + t;
+  return headers;
+}
+function setDeptStatus(text) {
+  deptMessage = text;
+  const el = document.getElementById("dept-status");
+  if (el) el.textContent = text;
+}
+function decodeB64(b64) {
+  const bin = atob(String(b64 || "").replace(/\n/g, ""));
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
+}
+function encodeB64(str) {
+  const bytes = new TextEncoder().encode(str);
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  }
+  return btoa(bin);
+}
+function ghFile(path) {
+  return "https://api.github.com/repos/" + GH_OWNER + "/" + GH_REPO + "/contents/" + path;
+}
+let pulling = false;
+function pullDepartment() {
+  if (pulling) return Promise.resolve();
+  pulling = true;
+  const headers = ghHeaders();
+  return fetch(ghFile(GH_DIR) + "?ref=main", { headers: headers, cache: "no-store" })
+    .then(r => {
+      if (r.status === 404) return [];
+      if (!r.ok) throw new Error("List " + r.status);
+      return r.json();
+    })
+    .then(files => {
+      if (!Array.isArray(files)) return [];
+      return Promise.all(files.filter(f => f && /\.json$/i.test(f.name)).map(f =>
+        fetch(f.url, { headers: headers, cache: "no-store" })
+          .then(r => r.ok ? r.json() : null)
+          .then(data => {
+            if (!data || !data.content) return;
+            const loc = JSON.parse(decodeB64(data.content));
+            if (!loc || !loc.id || sharedHidden(loc.id)) return;
+            loc._sha = data.sha;
+            const ready = hydrateShared(loc);
+            const i = library.locations.findIndex(l => l.id === loc.id);
+            if (i === -1) library.locations.push(ready);
+            else library.locations[i] = ready;
+            if (library.activeId === loc.id && (step === 0 || step === 4)) survey = ready.survey;
+          })
+      ));
+    })
+    .then(() => {
+      save();
+      setDeptStatus(deptToken() ? "Department list is live. This phone can update it." : "Department list loaded. Add the key on this phone to publish changes.");
+      if (step === 0 && !(document.activeElement && document.activeElement.id === "deptkey")) render();
+    })
+    .catch(() => {
+      setDeptStatus("Couldn't reach the department list. Showing what's on this phone.");
+    })
+    .then(() => { pulling = false; });
+}
+function pushLocation(loc) {
+  if (!loc || loc.id === "demo-tour") return Promise.resolve();
+  if (!deptToken()) {
+    setDeptStatus("Saved on this phone only. Add the department key to share it.");
+    return Promise.resolve();
+  }
+  const copy = { id: loc.id, updated: Date.now(), shared: true, survey: JSON.parse(JSON.stringify(loc.survey)) };
+  const content = encodeB64(JSON.stringify(copy));
+  const path = GH_DIR + "/" + loc.id + ".json";
+  const headers = ghHeaders();
+  headers["Content-Type"] = "application/json";
+  function put(sha) {
+    const body = { message: "Update " + ((loc.survey.building && loc.survey.building.name) || loc.id), content: content, branch: "main" };
+    if (sha) body.sha = sha;
+    return fetch(ghFile(path), { method: "PUT", headers: headers, body: JSON.stringify(body) })
+      .then(r => r.json().then(data => ({ ok: r.ok, status: r.status, data: data })));
+  }
+  const shaReady = loc._sha
+    ? Promise.resolve(loc._sha)
+    : fetch(ghFile(path) + "?ref=main", { headers: ghHeaders() }).then(r => r.ok ? r.json() : null).then(d => d && d.sha);
+  return shaReady.then(sha => put(sha)).then(res => {
+    if (res.status === 409) {
+      return fetch(ghFile(path) + "?ref=main", { headers: ghHeaders() }).then(r => r.ok ? r.json() : null).then(d => put(d && d.sha));
+    }
+    return res;
+  }).then(res => {
+    if (!res.ok) throw new Error((res.data && res.data.message) || ("Save " + res.status));
+    loc._sha = res.data.content && res.data.content.sha;
+    loc.shared = true;
+    loc.updated = copy.updated;
+    save();
+    setDeptStatus("Shared with the department.");
+  }).catch(err => {
+    setDeptStatus("Could not share: " + (err && err.message ? err.message : "failed"));
+  });
+}
+function pushActive() {
+  const loc = library.locations.find(l => l.id === library.activeId);
+  if (!loc) return;
+  const b = loc.survey.building || {};
+  const has = (b.name || "").trim() || (b.address || "").trim() || (loc.survey.pins || []).length || (loc.survey.plans || []).length;
+  if (!has) return;
+  pushLocation(loc);
+}
+function deleteRemote(id) {
+  if (!deptToken()) return Promise.resolve();
+  const path = GH_DIR + "/" + id + ".json";
+  const headers = ghHeaders();
+  return fetch(ghFile(path) + "?ref=main", { headers: headers })
     .then(r => r.ok ? r.json() : null)
     .then(data => {
-      if (!data || !Array.isArray(data.locations)) return;
-      data.locations.forEach(loc => {
-        if (!loc || !loc.id || sharedHidden(loc.id)) return;
-        const ready = hydrateShared(loc);
-        const i = library.locations.findIndex(l => l.id === loc.id);
-        if (i === -1) library.locations.push(ready);
-        else library.locations[i] = ready;
+      if (!data || !data.sha) return;
+      headers["Content-Type"] = "application/json";
+      return fetch(ghFile(path), {
+        method: "DELETE",
+        headers: headers,
+        body: JSON.stringify({ message: "Remove " + id, sha: data.sha, branch: "main" })
       });
-      if (step === 0) render();
     })
     .catch(() => {});
 }
@@ -909,7 +1048,10 @@ function ensureDemo() {
 }
 try { ensureDemo(); } catch (e) {}
 render();
-loadShared();
+pullDepartment();
+setInterval(function () {
+  if (step === 0 && document.visibilityState !== "hidden") pullDepartment();
+}, 20000);
 </script>
 </body>
 </html>
