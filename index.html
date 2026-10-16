@@ -353,7 +353,7 @@ function chipHtml(interior) {
 }
 
 function sortedLocations() {
-  return library.locations.slice().sort((a, b) => {
+  return library.locations.filter(l => l.id !== "demo-tour").slice().sort((a, b) => {
     const ad = tourInfo(a.survey.building.lastInspected).due ? 0 : 1;
     const bd = tourInfo(b.survey.building.lastInspected).due ? 0 : 1;
     if (ad !== bd) return ad - bd;
@@ -1117,15 +1117,19 @@ function pullDepartment() {
         fetch(f.url, { headers: headers, cache: "no-store" })
           .then(r => r.ok ? r.json() : null)
           .then(data => {
-            if (!data || !data.content) return;
-            const loc = JSON.parse(decodeB64(data.content));
-            if (!loc || !loc.id || sharedHidden(loc.id)) return;
-            loc._sha = data.sha;
-            const ready = hydrateShared(loc);
-            const i = library.locations.findIndex(l => l.id === loc.id);
-            if (i === -1) library.locations.push(ready);
-            else library.locations[i] = ready;
-            if (library.activeId === loc.id && (step === 0 || step === 4)) survey = ready.survey;
+            if (!data) return;
+            const parsed = data.content
+              ? Promise.resolve(JSON.parse(decodeB64(data.content)))
+              : (data.download_url ? fetch(data.download_url, { cache: "no-store" }).then(r => r.ok ? r.json() : null) : Promise.resolve(null));
+            return parsed.then(loc => {
+              if (!loc || !loc.id || loc.id === "demo-tour" || sharedHidden(loc.id)) return;
+              loc._sha = data.sha;
+              const ready = hydrateShared(loc);
+              const i = library.locations.findIndex(l => l.id === loc.id);
+              if (i === -1) library.locations.push(ready);
+              else library.locations[i] = ready;
+              if (library.activeId === loc.id && (step === 0 || step === 4)) survey = ready.survey;
+            });
           })
       ));
     })
@@ -1210,7 +1214,7 @@ function ensureDemo() {
   library.locations.unshift({ id: "demo-tour", updated: Date.now(), shared: true, survey: demoSurvey() });
   save();
 }
-try { ensureDemo(); } catch (e) {}
+library.locations = library.locations.filter(l => l.id !== "demo-tour");
 render();
 pullDepartment();
 setInterval(function () {
