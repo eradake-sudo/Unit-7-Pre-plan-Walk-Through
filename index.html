@@ -2,386 +2,290 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Pre-Plan Walkthrough</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
   * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    background: #0f1419;
-    color: #e7e9ea;
-    line-height: 1.45;
-  }
-  .wrap { max-width: 540px; margin: 0 auto; padding: 16px 16px 80px; }
-  h1 { font-size: 1.5rem; margin: 0 0 6px; font-weight: 700; }
-  h2 { font-size: 1.15rem; margin: 18px 0 8px; color: #1d9bf0; }
-  p { margin: 6px 0 12px; color: #c9cdd1; }
-  .card {
-    background: #1a1d21;
-    border: 1px solid #2f3336;
-    border-radius: 14px;
-    padding: 16px;
-    margin: 12px 0;
-  }
-  button {
-    width: 100%;
-    background: #1d9bf0;
-    color: #fff;
-    border: none;
-    padding: 14px;
-    border-radius: 10px;
-    font-size: 1rem;
-    font-weight: 600;
-    margin: 6px 0;
-    cursor: pointer;
-  }
-  button.secondary { background: #2f3336; }
-  button.danger { background: #f4212e; }
-  button:disabled { opacity: 0.45; cursor: not-allowed; }
-  input, select, textarea {
-    width: 100%;
-    padding: 12px;
-    margin: 4px 0 12px;
-    border-radius: 10px;
-    border: 1px solid #2f3336;
-    background: #0f1419;
-    color: #e7e9ea;
-    font-size: 1rem;
-  }
-  label { font-size: 0.9rem; color: #8b949e; display: block; margin-top: 8px; }
-  .progress { height: 4px; background: #2f3336; border-radius: 2px; margin: 12px 0 16px; }
-  .progress-bar { height: 100%; background: #1d9bf0; border-radius: 2px; transition: width .25s; }
-  #map { height: 360px; border-radius: 14px; margin: 12px 0; background: #1a1d21; border: 1px solid #2f3336; }
-  .critical { color: #f4212e; font-weight: 600; }
-  .ok { color: #00ba7c; }
-  .nav { display: flex; gap: 8px; margin-top: 16px; }
-  .nav button { flex: 1; }
-  .pin { padding: 10px 0; border-bottom: 1px solid #2f3336; font-size: 0.92rem; }
-  .coords { font-family: ui-monospace, monospace; font-size: 0.8rem; color: #8b949e; }
-  small { color: #8b949e; }
-  .warning { background: #3d1f1f; border: 1px solid #f4212e; color: #ff8a8a; padding: 12px; border-radius: 10px; margin: 12px 0; }
-  .success { background: #1a3a1a; border: 1px solid #00ba7c; color: #7ee0b0; padding: 12px; border-radius: 10px; margin: 12px 0; }
+  body { margin: 0; background: #0e1114; color: #f3f5f7; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  .wrap { max-width: 540px; margin: 0 auto; padding: 16px 16px 48px; }
+  h1 { font-size: 1.7rem; margin: 0 0 6px; letter-spacing: 0.02em; text-transform: uppercase; }
+  p { color: #9aa3ad; }
+  button { width: 100%; background: #e8a317; color: #1a1406; border: 0; border-radius: 12px; padding: 14px; font-size: 1rem; font-weight: 700; margin: 6px 0; }
+  button.ghost { background: #212830; color: #f3f5f7; }
+  button.on { outline: 2px solid #f3f5f7; }
+  input, select, textarea { width: 100%; margin: 4px 0 12px; padding: 12px; border-radius: 12px; border: 1px solid #2c353e; background: #0e1114; color: #f3f5f7; font-size: 1rem; }
+  label { color: #9aa3ad; font-size: 0.9rem; }
+  .card { background: #171c21; border: 1px solid #2c353e; border-radius: 14px; padding: 14px; margin: 12px 0; }
+  .nav { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+  .chips button { width: auto; flex: 0 0 auto; border-radius: 999px; padding: 8px 14px; }
+  #map-wrap { height: 380px; width: 100%; border: 2px solid #e8a317; border-radius: 14px; overflow: hidden; background: #171c21; }
+  #map { height: 100%; width: 100%; }
+  .leaflet-container { height: 100% !important; width: 100% !important; background: #171c21; font: inherit; }
+  .leaflet-container img { max-width: none !important; max-height: none !important; }
+  .pin-dot { width: 16px; height: 16px; border-radius: 99px; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.6); }
+  .bar { height: 4px; background: #212830; border-radius: 4px; margin: 10px 0 16px; }
+  .bar > div { height: 100%; background: #e8a317; width: 0; }
+  .warn { border: 1px solid #e23b3b; color: #e23b3b; border-radius: 12px; padding: 12px; }
+  .shot { width: 100%; border-radius: 10px; margin-top: 8px; }
+  .row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  small { color: #9aa3ad; }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <div class="progress"><div class="progress-bar" id="bar"></div></div>
+  <div class="bar"><div id="bar"></div></div>
   <div id="app"></div>
 </div>
-
 <script>
-const CRITICAL = [
-  { id: 'gas', label: 'Gas shutoff', tip: 'Exterior near meter. Note the side of the building and fastest approach.' },
-  { id: 'electric', label: 'Main electrical disconnect', tip: 'Usually outside by the meter or in the main electrical room.' },
-  { id: 'knox', label: 'Knox box', tip: 'Near main entrance. Note side and height.' },
-  { id: 'exits', label: 'Exits / entrances', tip: 'Every exterior door. Note swing and if locked.' },
-  { id: 'facp', label: 'Fire alarm panel (FACP)', tip: 'Often near main entrance, office, or mechanical room.' }
+const TYPES = [
+  { id: "gas", label: "Gas", color: "#e8a317" },
+  { id: "electric", label: "Electric", color: "#f97316" },
+  { id: "hydrant", label: "Hydrant", color: "#3d8bfd" },
+  { id: "knox", label: "Knox", color: "#f3f5f7" },
+  { id: "exits", label: "Exit", color: "#3dbe7a" },
+  { id: "facp", label: "FACP", color: "#e23b3b" },
+  { id: "other", label: "Other", color: "#9aa3ad" }
 ];
-
-const STEPS = ['welcome', 'building', 'exterior', 'interior', 'review'];
+const CRITICAL = ["gas", "electric", "knox", "exits", "facp"];
+const STEPS = ["start", "building", "exterior", "interior", "plan"];
+const KEY = "fd-preplan-pages-v1";
 let step = 0;
-let survey = JSON.parse(localStorage.getItem('preplan') || 'null') || {
-  id: Date.now(), building: {}, pins: [], completed: {}
-};
+let active = "gas";
+let survey = load();
+let map, pinLayer, buildingMarker;
 
-function save() {
-  localStorage.setItem('preplan', JSON.stringify(survey));
+function load() {
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (!raw) throw new Error("empty");
+    const data = JSON.parse(raw);
+    if (!data.building || !Array.isArray(data.pins)) throw new Error("bad");
+    return data;
+  } catch (e) {
+    return { building: { name: "", address: "", occupancy: "Educational (Group E)", stories: "1", contact: "", hazards: "", hydrants: "", notes: "" }, pins: [] };
+  }
 }
-
-function progress() {
-  document.getElementById('bar').style.width = Math.round((step / (STEPS.length - 1)) * 100) + '%';
+function save() { localStorage.setItem(KEY, JSON.stringify(survey)); }
+function label(id) { return (TYPES.find(t => t.id === id) || {}).label || id; }
+function color(id) { return (TYPES.find(t => t.id === id) || {}).color || "#9aa3ad"; }
+function uid() { return Math.random().toString(36).slice(2, 10); }
+function esc(s) {
+  return String(s || "").replace(/[&<>"']/g, function (c) {
+    if (c === "&") return "&" + "amp;";
+    if (c === "<") return "&" + "lt;";
+    if (c === ">") return "&" + "gt;";
+    if (c === '"') return "&" + "quot;";
+    return "&" + "#39;";
+  });
 }
 
 function render() {
-  progress();
-  const app = document.getElementById('app');
+  if (map) { try { map.remove(); } catch (e) {} map = null; pinLayer = null; buildingMarker = null; }
+  document.getElementById("bar").style.width = (step / (STEPS.length - 1) * 100) + "%";
+  const app = document.getElementById("app");
   const s = STEPS[step];
-
-  if (s === 'welcome') {
-    app.innerHTML = `
-      <h1>Pre-Plan Walkthrough</h1>
-      <p>Guided survey for first-due info. Mark utilities, hydrants, exits, and the alarm panel with GPS and photos. Finish with a Quick Action Plan you can pull up on scene.</p>
-      <div class="card">
-        <strong>Steps</strong>
-        <ol style="margin:8px 0 0 18px; padding:0;">
-          <li>Building basics, contacts, hazards</li>
-          <li>Exterior satellite map — tap to drop markers</li>
-          <li>Interior — FACP and exits</li>
-          <li>Review and generate Quick Action Plan</li>
-        </ol>
-      </div>
-      <button onclick="step=1; render()">Start New Walkthrough</button>
-      <button class="secondary" onclick="step=4; render()">Jump to Review</button>
-    `;
-  }
-
-  else if (s === 'building') {
-    const b = survey.building;
-    app.innerHTML = `
-      <h1>Building Basics</h1>
-      <p>Enter what you know. You can update later.</p>
-      <label>Name / Occupancy</label>
-      <input id="name" value="${b.name || ''}" placeholder="Mt Clare School">
-      <label>Address</label>
-      <input id="address" value="${b.address || ''}" placeholder="Street, city">
-      <label>Occupancy Type</label>
-      <select id="occ">
-        <option>Educational (Group E)</option>
-        <option>Mercantile</option>
-        <option>Business</option>
-        <option>Assembly</option>
-        <option>Other</option>
-      </select>
-      <label>Stories</label>
-      <input id="stories" type="number" value="${b.stories || 1}" min="1">
-      <label>Primary Contact</label>
-      <input id="contact" value="${b.contact || ''}" placeholder="Name and phone">
-      <label>Known Hazards</label>
-      <textarea id="hazards" rows="2" placeholder="Fireworks, oxygen, chemicals, etc.">${b.hazards || ''}</textarea>
-      <label>Nearest Hydrants</label>
-      <textarea id="hydrants" rows="2" placeholder="Location and distance">${b.hydrants || ''}</textarea>
-      <label>Notes</label>
-      <textarea id="notes" rows="2">${b.notes || ''}</textarea>
-      <div class="nav">
-        <button class="secondary" onclick="step--; render()">Back</button>
-        <button onclick="saveBuilding()">Next: Exterior Map</button>
-      </div>
-    `;
-    document.getElementById('occ').value = b.occupancy || 'Educational (Group E)';
-  }
-
-  else if (s === 'exterior') {
-    app.innerHTML = `
-      <h1>Exterior Map</h1>
-      <p>Satellite view of the address. Tap the map to drop a marker, or use the buttons below. Note the side of the building for fastest access.</p>
-      <div id="map" style="height:380px !important; min-height:380px !important; width:100% !important; background:#1a1d21; border:2px solid #1d9bf0; border-radius:12px; margin:12px 0; display:block; position:relative;">
-        <div style="padding:40px; text-align:center; color:#71767b;">Loading satellite map…</div>
-      </div>
-      <button onclick="centerMe()">My Location</button>
-      <div class="card">
-        <h2>Mark Locations</h2>
-        <button onclick="mark('gas')">Gas Shutoff</button>
-        <button onclick="mark('electric')">Electric Main</button>
-        <button onclick="mark('hydrant')">Hydrant</button>
-        <button onclick="mark('knox')">Knox Box</button>
-        <button onclick="mark('exits')">Exit / Entrance</button>
-        <button class="secondary" onclick="mark('other')">Other</button>
-      </div>
+  const b = survey.building;
+  if (s === "start") {
+    app.innerHTML = `<h1>Pre-Plan</h1><p>Satellite overhead. Tap to mark gas, electric, hydrants, Knox, and exits. Finish with a Quick Action Plan.</p>
+      <button onclick="fresh()">Start new walkthrough</button>
+      ${b.name ? `<button class="ghost" onclick="go(2)">Continue ${esc(b.name)}</button>` : ""}`;
+  } else if (s === "building") {
+    app.innerHTML = `<h1>Building</h1>
+      <label>Name</label><input id="name" value="${esc(b.name)}" placeholder="Mt Clare School">
+      <label>Address</label><input id="address" value="${esc(b.address)}" placeholder="1022 N High St, Carlinville IL">
+      <label>Occupancy</label><select id="occ"><option>Educational (Group E)</option><option>Mercantile</option><option>Business</option><option>Assembly</option><option>Residential</option><option>Industrial</option><option>Other</option></select>
+      <label>Stories</label><input id="stories" value="${esc(b.stories || "1")}">
+      <label>Contact</label><input id="contact" value="${esc(b.contact)}" placeholder="Name and phone">
+      <label>Hazards</label><textarea id="hazards" rows="2">${esc(b.hazards)}</textarea>
+      <label>Hydrant notes</label><textarea id="hydrants" rows="2">${esc(b.hydrants)}</textarea>
+      <label>Notes</label><textarea id="notes" rows="2">${esc(b.notes)}</textarea>
+      <div class="nav"><button class="ghost" onclick="go(0)">Back</button><button onclick="saveBuilding()">Exterior map</button></div>`;
+    document.getElementById("occ").value = b.occupancy || "Educational (Group E)";
+  } else if (s === "exterior") {
+    app.innerHTML = `<h1>Exterior</h1>
+      <p>Pick the item, then tap the satellite photo. Write the side of the building so crews do not come in the wrong way.</p>
+      <div class="chips">${TYPES.filter(t => t.id !== "facp").map(t => `<button class="${active === t.id ? "on" : "ghost"}" onclick="setType('${t.id}')">${t.label}</button>`).join("")}</div>
+      <div id="map-wrap"><div id="map"></div></div>
+      <p><small>Tap the photo to drop a <span id="active-label">${label(active)}</span> marker.</small></p>
+      <button class="ghost" onclick="dropGps()">Drop ${label(active)} at my GPS</button>
       <div id="pins"></div>
-      <div class="nav">
-        <button class="secondary" onclick="step--; render()">Back</button>
-        <button onclick="step++; render()">Next: Interior</button>
-      </div>
-    `;
-    setTimeout(initMap, 50);
+      <div class="nav"><button class="ghost" onclick="go(1)">Back</button><button onclick="go(3)">Interior</button></div>`;
     showPins();
-  }
-
-  else if (s === 'interior') {
-    app.innerHTML = `
-      <h1>Interior</h1>
-      <p>Mark the fire alarm panel and exits. Add a photo of each.</p>
-      <div class="card">
-        <button onclick="mark('facp')">Mark FACP</button>
-        <button onclick="mark('exits')">Mark Exit</button>
-        <button class="secondary" onclick="mark('other')">Other Interior</button>
-      </div>
+    setTimeout(bootMap, 30);
+  } else if (s === "interior") {
+    const missing = CRITICAL.filter(id => !survey.pins.some(p => p.type === id));
+    app.innerHTML = `<h1>Interior</h1><p>Stand at the panel or the door. Mark it, note the room and wall, take the photo.</p>
+      <button onclick="dropGps('facp')">Mark FACP here</button>
+      <button class="ghost" onclick="dropGps('exits')">Mark exit here</button>
       <div id="pins"></div>
-      <div class="nav">
-        <button class="secondary" onclick="step--; render()">Back</button>
-        <button onclick="step++; render()">Review</button>
-      </div>
-    `;
+      ${missing.length ? `<div class="warn" id="gap">Still needed before you sign off: ${missing.map(label).join(", ")}</div>` : `<p>Critical items are marked.</p>`}
+      <div class="nav"><button class="ghost" onclick="go(2)">Back</button><button onclick="finish()">Quick Action Plan</button></div>`;
     showPins();
-  }
-
-  else if (s === 'review') {
-    const missing = CRITICAL.filter(c => !survey.completed[c.id]);
-    app.innerHTML = `
-      <h1>Review</h1>
-      ${missing.length
-        ? `<div class="warning"><strong>Still needed:</strong><ul>${missing.map(m => `<li>${m.label}</li>`).join('')}</ul></div>`
-        : '<div class="success">All critical items marked.</div>'}
-      <div class="card">
-        <strong>${survey.building.name || 'Unnamed'}</strong><br>
-        ${survey.building.address || ''}<br>
-        <small>${survey.building.occupancy || ''} • ${survey.building.stories || 1} story</small>
-      </div>
-      <div id="pins"></div>
-      <button onclick="generatePlan()">View Quick Action Plan</button>
-      <button class="secondary" onclick="step=0; render()">Start Over</button>
-    `;
-    showPins();
+  } else {
+    app.innerHTML = planHtml();
   }
 }
 
+function fresh() { survey = load(); survey = { building: { name: "", address: "", occupancy: "Educational (Group E)", stories: "1", contact: "", hazards: "", hydrants: "", notes: "" }, pins: [] }; save(); go(1); }
+function go(n) { step = n; save(); render(); }
+function setType(id) { active = id; render(); }
 function saveBuilding() {
   const b = survey.building;
-  b.name = document.getElementById('name').value;
-  b.address = document.getElementById('address').value;
-  b.occupancy = document.getElementById('occ').value;
-  b.stories = document.getElementById('stories').value;
-  b.contact = document.getElementById('contact').value;
-  b.hazards = document.getElementById('hazards').value;
-  b.hydrants = document.getElementById('hydrants').value;
-  b.notes = document.getElementById('notes').value;
-  save();
-  step++;
-  render();
+  b.name = document.getElementById("name").value;
+  b.address = document.getElementById("address").value;
+  b.occupancy = document.getElementById("occ").value;
+  b.stories = document.getElementById("stories").value;
+  b.contact = document.getElementById("contact").value;
+  b.hazards = document.getElementById("hazards").value;
+  b.hydrants = document.getElementById("hydrants").value;
+  b.notes = document.getElementById("notes").value;
+  save(); go(2);
+}
+function finish() {
+  const missing = CRITICAL.filter(id => !survey.pins.some(p => p.type === id));
+  if (missing.length && !confirm("Missing: " + missing.map(label).join(", ") + ". Open the plan anyway?")) return;
+  go(4);
 }
 
-function getLoc(cb) {
-  if (!navigator.geolocation) return cb(null, null);
+function addPin(lat, lng, type) {
+  survey.pins.push({ id: uid(), type: type || active, note: "", lat, lng });
+  save();
+  if (STEPS[step] === "exterior" && map && lat != null) drawPins();
+  showPins();
+}
+function patch(id, note) {
+  const pin = survey.pins.find(p => p.id === id);
+  if (pin) pin.note = note;
+  save();
+}
+function removePin(id) {
+  survey.pins = survey.pins.filter(p => p.id !== id);
+  save();
+  if (map) drawPins();
+  showPins();
+}
+function photo(id, input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    const pin = survey.pins.find(p => p.id === id);
+    if (!pin) return;
+    pin.media = reader.result;
+    pin.mediaType = file.type.indexOf("video") === 0 ? "video" : "image";
+    save();
+    showPins();
+  };
+  reader.readAsDataURL(file);
+}
+function dropGps(type) {
+  if (!navigator.geolocation) { alert("GPS is not available on this device."); return; }
   navigator.geolocation.getCurrentPosition(
-    p => cb(p.coords.latitude, p.coords.longitude),
-    () => cb(null, null),
-    { enableHighAccuracy: true, timeout: 8000 }
+    pos => addPin(pos.coords.latitude, pos.coords.longitude, type || active),
+    () => alert("Location was denied. You can still tap the satellite photo."),
+    { enableHighAccuracy: true, timeout: 10000 }
   );
 }
 
-function mark(type) {
-  const note = prompt('Note (side of building, room, description):') || '';
-  getLoc((lat, lng) => {
-    const pin = { type, note, lat, lng, time: new Date().toISOString() };
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/*,video/*';
-    input.capture = 'environment';
-    input.onchange = e => {
-      const file = e.target.files[0];
-      if (file) {
-        const r = new FileReader();
-        r.onload = () => {
-          pin.media = r.result;
-          pin.mediaType = file.type.startsWith('video') ? 'video' : 'image';
-          finish(pin);
-        };
-        r.readAsDataURL(file);
-      } else finish(pin);
-    };
-    input.click();
-    setTimeout(() => { if (!pin.media) finish(pin); }, 8000);
-  });
-  function finish(p) {
-    survey.pins.push(p);
-    survey.completed[type] = true;
-    save();
-    if (window.map && p.lat) L.marker([p.lat, p.lng]).addTo(window.map).bindPopup(type + ': ' + note);
-    showPins();
-  }
-}
-
 function showPins() {
-  const el = document.getElementById('pins');
+  const el = document.getElementById("pins");
   if (!el) return;
-  el.innerHTML = survey.pins.length
-    ? survey.pins.map(p => `
-        <div class="pin">
-          <strong>${p.type.toUpperCase()}</strong> — ${p.note || 'No note'}<br>
-          ${p.lat ? `<span class="coords">${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}</span>` : ''}
-          ${p.media ? (p.mediaType === 'video' ? `<video src="${p.media}" controls style="max-width:100%;margin-top:6px;"></video>` : `<img src="${p.media}" style="max-width:100%;margin-top:6px;border-radius:8px;">`) : ''}
-        </div>`).join('')
-    : '<p><small>No markers yet.</small></p>';
+  const list = STEPS[step] === "interior"
+    ? survey.pins.filter(p => p.type === "facp" || p.type === "exits" || p.type === "other")
+    : survey.pins.filter(p => p.type !== "facp");
+  el.innerHTML = list.length ? list.map(p => `<div class="card">
+      <div class="row"><strong><span class="pin-dot" style="display:inline-block;background:${color(p.type)};vertical-align:middle"></span> ${label(p.type)}</strong>
+      <button class="ghost" style="width:auto;padding:8px 12px" onclick="removePin('${p.id}')">Remove</button></div>
+      ${p.lat != null ? `<small>${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}</small>` : ""}
+      <input value="${esc(p.note)}" placeholder="Side of building, room, access" oninput="patch('${p.id}', this.value)">
+      <label class="ghost" style="display:block;text-align:center;background:#212830;border-radius:10px;padding:10px;font-weight:700">Add photo
+        <input type="file" accept="image/*,video/*" capture="environment" style="display:none" onchange="photo('${p.id}', this)">
+      </label>
+      ${p.media && p.mediaType !== "video" ? `<img class="shot" src="${p.media}" alt="">` : ""}
+      ${p.media && p.mediaType === "video" ? `<video class="shot" src="${p.media}" controls></video>` : ""}
+    </div>`).join("") : `<p><small>No markers yet.</small></p>`;
 }
 
-function initMap() {
-  const el = document.getElementById('map');
-  if (!el) return;
-
-  // Fallback static satellite image if Leaflet fails
-  function showStatic() {
-    const addr = encodeURIComponent((survey.building.address || '') + ' ' + (survey.building.name || ''));
-    if (!addr.trim()) return;
-    // Esri static map (no key required for basic)
-    const staticUrl = `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?bbox=-90,39,-89,40&bboxSR=4326&size=600,400&format=png&f=image`;
-    el.innerHTML = `<img src="${staticUrl}" style="width:100%; height:100%; object-fit:cover;" alt="Satellite view"><div style="position:absolute;bottom:8px;left:8px;background:rgba(0,0,0,0.6);color:#fff;padding:4px 8px;border-radius:4px;font-size:0.8rem;">Static view — tap markers below</div>`;
-  }
-
-  if (typeof L === 'undefined') {
-    showStatic();
-    return;
-  }
-
-  try {
-    if (window.map) { try { window.map.remove(); } catch(e){} }
-    el.innerHTML = '';
-    const map = L.map(el, { zoomControl: true }).setView([39.13, -89.82], 16);
-    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-      attribution: 'Esri', maxZoom: 19
-    }).addTo(map);
-    window.map = map;
-
-    const addr = (survey.building.address || '') + ' ' + (survey.building.name || '');
-    if (addr.trim()) {
-      fetch('https://nominatim.openstreetmap.org/search?format=json&q=' + encodeURIComponent(addr) + '&limit=1')
-        .then(r => r.json())
-        .then(d => {
-          if (d && d[0]) {
-            const lat = +d[0].lat, lon = +d[0].lon;
-            map.setView([lat, lon], 18);
-            L.marker([lat, lon]).addTo(map).bindPopup('Building').openPopup();
-          }
-        }).catch(() => {});
-    }
-
-    map.on('click', e => {
-      const type = prompt('Type (gas, electric, hydrant, exits, knox, other):', 'gas') || 'other';
-      const note = prompt('Note:') || '';
-      const pin = { type: type.toLowerCase(), note, lat: e.latlng.lat, lng: e.latlng.lng, time: new Date().toISOString() };
-      survey.pins.push(pin);
-      survey.completed[pin.type] = true;
-      save();
-      L.marker(e.latlng).addTo(map).bindPopup(type + ': ' + note);
-      showPins();
-    });
-
-    survey.pins.filter(p => p.lat).forEach(p => {
-      L.marker([p.lat, p.lng]).addTo(map).bindPopup(p.type + ': ' + (p.note || ''));
-    });
-
-    setTimeout(() => map.invalidateSize(), 200);
-    setTimeout(() => map.invalidateSize(), 600);
-  } catch (e) {
-    showStatic();
-  }
+function icon(c) {
+  return L.divIcon({ className: "", html: `<div class="pin-dot" style="background:${c}"></div>`, iconSize: [16, 16], iconAnchor: [8, 8] });
 }
-
-function centerMe() {
-  getLoc((lat, lng) => {
-    if (window.map && lat) window.map.setView([lat, lng], 18);
+function bootMap() {
+  const el = document.getElementById("map");
+  if (!el) return;
+  if (typeof L === "undefined") { setTimeout(bootMap, 80); return; }
+  if (el.offsetHeight < 40) { setTimeout(bootMap, 40); return; }
+  map = L.map(el, { zoomControl: true }).setView([39.28, -89.65], 16);
+  L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { attribution: "Tiles © Esri", maxZoom: 19 }).addTo(map);
+  pinLayer = L.layerGroup().addTo(map);
+  map.on("click", e => addPin(e.latlng.lat, e.latlng.lng));
+  const fix = () => { try { map.invalidateSize(); } catch (e) {} };
+  setTimeout(fix, 60); setTimeout(fix, 300); setTimeout(fix, 800);
+  if (window.ResizeObserver) new ResizeObserver(fix).observe(el.parentElement);
+  drawPins();
+  flyAddress();
+}
+function drawPins() {
+  if (!pinLayer) return;
+  pinLayer.clearLayers();
+  survey.pins.forEach(p => {
+    if (p.lat == null) return;
+    L.marker([p.lat, p.lng], { icon: icon(color(p.type)) }).addTo(pinLayer).bindPopup(label(p.type) + (p.note ? " — " + p.note : ""));
   });
 }
-
-function generatePlan() {
-  const b = survey.building;
-  const pins = survey.pins;
-  const by = t => pins.filter(p => p.type === t).map(p => p.note || 'Marked').join('; ') || 'Not marked';
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Quick Action Plan</title>
-  <style>body{font-family:-apple-system,sans-serif;margin:16px;color:#111}h1{font-size:1.5rem}h2{border-bottom:2px solid #1d9bf0;padding-bottom:4px;margin-top:18px}.box{border:1px solid #ddd;border-radius:8px;padding:12px;margin:10px 0}.c{color:#c00;font-weight:600}img{max-width:100%;border-radius:6px;margin:6px 0}@media print{button{display:none}}</style></head><body>
-  <h1>Quick Action Plan</h1>
-  <p><strong>${b.name || 'Building'}</strong><br>${b.address || ''}<br>${b.occupancy || ''} • ${b.stories || 1} story</p>
-  <div class="box"><h2>Contact</h2><p>${b.contact || 'None entered'}</p></div>
-  <div class="box"><h2>Hazards</h2><p class="c">${b.hazards || 'None noted'}</p></div>
-  <div class="box"><h2>Hydrants</h2><p>${b.hydrants || 'None noted'}</p></div>
-  <div class="box"><h2>Utilities & Access</h2>
-    <p><strong>Gas:</strong> ${by('gas')}</p>
-    <p><strong>Electric:</strong> ${by('electric')}</p>
-    <p><strong>Knox:</strong> ${by('knox')}</p>
-  </div>
-  <div class="box"><h2>Exits / Entrances</h2><p>${by('exits')}</p></div>
-  <div class="box"><h2>FACP</h2><p>${by('facp')}</p></div>
-  <div class="box"><h2>All Markers</h2>${pins.map(p => `<p><strong>${p.type.toUpperCase()}</strong>: ${p.note || ''} ${p.lat ? '(' + p.lat.toFixed(5) + ', ' + p.lng.toFixed(5) + ')' : ''}${p.media && p.mediaType !== 'video' ? '<br><img src="' + p.media + '">' : ''}</p>`).join('') || 'None'}</div>
-  <p style="font-size:0.8rem;color:#666;margin-top:20px">Generated ${new Date().toLocaleString()}</p>
-  <button onclick="window.print()" style="padding:12px 20px;background:#1d9bf0;color:#fff;border:none;border-radius:8px;font-size:1rem;">Save as PDF</button>
-  </body></html>`;
-  const w = window.open('', '_blank');
-  if (w) { w.document.write(html); w.document.close(); }
-  else alert('Allow pop-ups to view the plan.');
+function flyAddress() {
+  const q = (survey.building.address || "").trim();
+  if (q.length < 4) return;
+  fetch("https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates?f=json&maxLocations=1&SingleLine=" + encodeURIComponent(q))
+    .then(r => r.json())
+    .then(data => {
+      const loc = data.candidates && data.candidates[0] && data.candidates[0].location;
+      if (!loc || !map) return;
+      if (buildingMarker) buildingMarker.remove();
+      buildingMarker = L.marker([loc.y, loc.x], { icon: icon("#f3f5f7"), interactive: false }).addTo(map).bindPopup("Building");
+      map.setView([loc.y, loc.x], 18);
+      setTimeout(() => map && map.invalidateSize(), 100);
+    })
+    .catch(() => {});
 }
 
+function planHtml() {
+  const b = survey.building;
+  const located = survey.pins.filter(p => p.lat != null);
+  const missing = CRITICAL.filter(id => !survey.pins.some(p => p.type === id));
+  let img = "";
+  if (located.length) {
+    const lats = located.map(p => p.lat), lngs = located.map(p => p.lng);
+    const pad = 0.0018;
+    const south = Math.min.apply(null, lats) - pad, north = Math.max.apply(null, lats) + pad;
+    const west = Math.min.apply(null, lngs) - pad, east = Math.max.apply(null, lngs) + pad;
+    const src = `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?bbox=${west},${south},${east},${north}&bboxSR=4326&size=800,520&format=png&f=image`;
+    const dots = located.map(p => {
+      const x = (p.lng - west) / (east - west) * 100;
+      const y = (1 - (p.lat - south) / (north - south)) * 100;
+      return `<span style="position:absolute;left:${x}%;top:${y}%;width:12px;height:12px;border-radius:99px;border:2px solid #fff;background:${color(p.type)};transform:translate(-50%,-50%)"></span>`;
+    }).join("");
+    img = `<div style="position:relative;margin:12px 0;border-radius:14px;overflow:hidden;border:1px solid #2c353e"><img src="${src}" alt="Overhead" style="width:100%;display:block">${dots}</div>`;
+  }
+  const line = id => {
+    const list = survey.pins.filter(p => p.type === id);
+    return `<p><strong>${label(id)}:</strong> ${list.length ? list.map(p => esc(p.note) || "Marked, no side noted").join("; ") : "Not marked"}</p>`;
+  };
+  return `<h1>Quick Action Plan</h1>
+    <p>${esc(b.name) || "Unnamed"} · ${esc(b.address) || "No address"}</p>
+    ${missing.length ? `<div class="warn">Still missing: ${missing.map(label).join(", ")}</div>` : ""}
+    ${img}
+    <div class="card"><strong>Occupancy</strong><p>${esc(b.occupancy)} · ${esc(b.stories) || "1"} story<br>Contact: ${esc(b.contact) || "Not entered"}</p></div>
+    <div class="card"><strong>Hazards</strong><p style="color:#e23b3b">${esc(b.hazards) || "None noted"}</p></div>
+    <div class="card"><strong>Hydrants</strong><p>${esc(b.hydrants) || "None noted"}</p>${line("hydrant")}</div>
+    <div class="card"><strong>Fastest exterior access</strong>${line("gas")}${line("electric")}${line("knox")}${line("exits")}</div>
+    <div class="card"><strong>Interior</strong>${line("facp")}<p>${esc(b.notes)}</p></div>
+    ${survey.pins.map(p => `<div class="card"><strong>${label(p.type)}</strong> — ${esc(p.note) || "No note"}${p.lat != null ? `<br><small>${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}</small>` : ""}${p.media && p.mediaType !== "video" ? `<img class="shot" src="${p.media}" alt="">` : ""}</div>`).join("")}
+    <div class="nav"><button class="ghost" onclick="go(3)">Back</button><button onclick="window.print()">Save PDF</button></div>
+    <p><small>On iPhone, Save PDF opens the share sheet. Choose Save to Files.</small></p>`;
+}
 render();
 </script>
 </body>
