@@ -304,10 +304,11 @@ function render() {
     if (nextBtn) nextBtn.addEventListener("touchend", function (e) { e.preventDefault(); saveBuilding(); });
   } else if (s === "exterior") {
     app.innerHTML = `<h1>Exterior</h1>
-      <div class="nav"><button class="ghost" onclick="go(1)">Back</button><button type="button" onclick="go(3)">Interior</button></div>
+      <div class="nav"><button class="ghost" type="button" onclick="go(1)">Back</button><button type="button" onclick="go(3)">Next</button></div>
       <p>Pick the item, then tap the satellite photo. Write the side of the building so crews do not come in the wrong way.</p>
       <div class="chips" id="chips">${chipHtml(false)}</div>
       <div id="map-wrap"><div id="map"></div></div>
+      <p><small id="map-status">Finding the address…</small></p>
       <p><small>Tap the photo to drop a <span id="active-label">${label(active)}</span>.</small></p>
       <button class="ghost" type="button" onclick="dropGps()">Drop ${label(active)} at my GPS</button>
       <div id="pins"></div>`;
@@ -731,9 +732,11 @@ function bootMap() {
   if (!el) return;
   if (typeof L === "undefined") { setTimeout(bootMap, 80); return; }
   if (el.offsetHeight < 40) { setTimeout(bootMap, 40); return; }
+  const q = (survey.building.address || "").trim();
   const c = survey.building.center;
-  const start = c ? [c.lat, c.lng] : [39.28, -89.65];
-  const zoom = c ? (c.zoom || 18) : 16;
+  const haveFix = c && c.q && c.q === q;
+  const start = haveFix ? [c.lat, c.lng] : [39.28, -89.88];
+  const zoom = haveFix ? (c.zoom || 18) : 16;
   map = L.map(el, { zoomControl: true, maxZoom: 22, zoomSnap: 0.25 }).setView(start, zoom);
   L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { attribution: "Tiles © Esri", maxZoom: 22, maxNativeZoom: 19 }).addTo(map);
   pinLayer = L.layerGroup().addTo(map);
@@ -743,13 +746,52 @@ function bootMap() {
   setTimeout(fix, 60); setTimeout(fix, 300); setTimeout(fix, 800);
   if (window.ResizeObserver) new ResizeObserver(fix).observe(el.parentElement);
   drawPins();
-  if (!c) flyAddress();
+  const status = document.getElementById("map-status");
+  if (haveFix) { if (status) status.textContent = q; }
+  else if (q) flyAddress();
+  else if (status) status.textContent = "No address yet. Go back and enter one, or pan the map.";
 }
 function rememberView() {
   if (!map) return;
   const v = map.getCenter();
-  survey.building.center = { lat: v.lat, lng: v.lng, zoom: map.getZoom() };
+  const prev = survey.building.center || {};
+  survey.building.center = { lat: v.lat, lng: v.lng, zoom: map.getZoom(), q: prev.q || "" };
   save();
+}
+let geocodeToken = 0;
+function flyAddress() {
+  const q = (survey.building.address || "").trim();
+  const status = document.getElementById("map-status");
+  if (q.length < 4) { if (status) status.textContent = "Address is too short to find."; return; }
+  if (status) status.textContent = "Finding " + q + "…";
+  const token = ++geocodeToken;
+  const arc = "https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates?f=json&maxLocations=1&countryCode=USA&location=-89.82,39.13&distance=120000&SingleLine=" + encodeURIComponent(q);
+  fetch(arc)
+    .then(r => r.json())
+    .then(data => {
+      const hit = data.candidates && data.candidates[0];
+      const loc = hit && hit.location;
+      if (!loc) throw new Error("none");
+      return { lat: loc.y, lng: loc.x, label: hit.address || q };
+    })
+    .catch(() => fetch("https://photon.komoot.io/api/?limit=1&q=" + encodeURIComponent(q))
+      .then(r => r.json())
+      .then(data => {
+        const f = data.features && data.features[0];
+        if (!f) throw new Error("none");
+        return { lat: f.geometry.coordinates[1], lng: f.geometry.coordinates[0], label: q };
+      }))
+    .then(hit => {
+      if (token !== geocodeToken || !map) return;
+      survey.building.center = { lat: hit.lat, lng: hit.lng, zoom: 18, q: q };
+      save();
+      map.setView([hit.lat, hit.lng], 18);
+      if (status) status.textContent = hit.label;
+    })
+    .catch(() => {
+      if (token !== geocodeToken) return;
+      if (status) status.textContent = "Couldn't find that address. Check it, or pan the map.";
+    });
 }
 function drawPins() {
   if (!pinLayer) return;
@@ -763,24 +805,6 @@ function popupHtml(p) {
   return `<strong>${label(p.type)}</strong>${p.note ? "<br>" + esc(p.note) : "<br>No note"}` +
     (p.media && p.mediaType !== "video" ? `<br><img class="thumb" src="${p.media}" alt="" onclick="openPhoto('${p.id}')">` : "");
 }
-function flyAddress() {
-  const q = (survey.building.address || "").trim();
-  if (q.length < 4) return;
-  fetch("https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates?f=json&maxLocations=1&SingleLine=" + encodeURIComponent(q))
-    .then(r => r.json())
-    .then(data => {
-      const loc = data.candidates && data.candidates[0] && data.candidates[0].location;
-      if (!loc || !map) return;
-      survey.building.center = { lat: loc.y, lng: loc.x, zoom: 18 };
-      save();
-      if (buildingMarker) buildingMarker.remove();
-      buildingMarker = L.marker([loc.y, loc.x], { icon: icon("other"), interactive: false }).addTo(map).bindPopup("Building");
-      map.setView([loc.y, loc.x], 18);
-      setTimeout(() => map && map.invalidateSize(), 100);
-    })
-    .catch(() => {});
-}
-
 function sheetHtml() {
   const b = survey.building;
   const missing = CRITICAL.filter(gap);
