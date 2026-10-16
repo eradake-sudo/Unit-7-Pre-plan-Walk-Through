@@ -76,6 +76,7 @@ let step = 0;
 let active = "gas";
 let intActive = "facp";
 let survey = load();
+shrinkExisting();
 let map, pinLayer, buildingMarker;
 let sheetMaps = [];
 let openDetail = null;
@@ -103,10 +104,38 @@ function save() {
     try {
       const slim = JSON.parse(JSON.stringify(survey));
       (slim.pins || []).forEach(p => { delete p.media; });
-      (slim.plans || []).forEach(pl => { delete pl.image; (pl.pins || []).forEach(p => { delete p.media; }); });
+      (slim.plans || []).forEach(pl => (pl.pins || []).forEach(p => { delete p.media; }));
       localStorage.setItem(KEY, JSON.stringify(slim));
     } catch (e2) {}
   }
+}
+function shrinkImage(dataUrl, maxW, quality) {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxW / (img.width || maxW));
+      const w = Math.max(1, Math.round(img.width * scale));
+      const h = Math.max(1, Math.round(img.height * scale));
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL("image/jpeg", quality));
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
+function shrinkExisting() {
+  const jobs = [];
+  (survey.plans || []).forEach(pl => {
+    if (pl.image && pl.image.length > 400000) jobs.push(shrinkImage(pl.image, 1600, 0.72).then(url => { pl.image = url; }));
+  });
+  const pins = (survey.pins || []).concat((survey.plans || []).flatMap(pl => pl.pins || []));
+  pins.forEach(p => {
+    if (p.media && p.mediaType !== "video" && p.media.length > 180000) jobs.push(shrinkImage(p.media, 800, 0.62).then(url => { p.media = url; }));
+  });
+  if (jobs.length) Promise.all(jobs).then(() => save());
 }
 function typeOf(id) { return TYPES.find(t => t.id === id) || TYPES[TYPES.length - 1]; }
 function label(id) { return typeOf(id).label; }
@@ -290,15 +319,29 @@ function findPin(id, planId) {
 function photo(id, input, planId) {
   const file = input.files && input.files[0];
   if (!file) return;
+  const pin = findPin(id, planId);
+  if (!pin) return;
+  if (file.type.indexOf("video") === 0) {
+    const reader = new FileReader();
+    reader.onload = () => {
+      pin.media = reader.result;
+      pin.mediaType = "video";
+      save();
+      showPins();
+      showPlans();
+    };
+    reader.readAsDataURL(file);
+    return;
+  }
   const reader = new FileReader();
   reader.onload = () => {
-    const pin = findPin(id, planId);
-    if (!pin) return;
-    pin.media = reader.result;
-    pin.mediaType = file.type.indexOf("video") === 0 ? "video" : "image";
-    save();
-    showPins();
-    showPlans();
+    shrinkImage(reader.result, 800, 0.62).then(url => {
+      pin.media = url;
+      pin.mediaType = "image";
+      save();
+      showPins();
+      showPlans();
+    });
   };
   reader.readAsDataURL(file);
 }
@@ -360,9 +403,11 @@ function addPlan(input) {
   const name = (document.getElementById("planName").value || "").trim() || "Floor plan";
   const reader = new FileReader();
   reader.onload = () => {
-    survey.plans.push({ id: uid(), name, image: reader.result, pins: [] });
-    save();
-    showPlans();
+    shrinkImage(reader.result, 1600, 0.72).then(url => {
+      survey.plans.push({ id: uid(), name, image: url, pins: [] });
+      save();
+      showPlans();
+    });
   };
   reader.readAsDataURL(file);
 }
