@@ -346,7 +346,8 @@ function render() {
       <h1>Exterior – Map & GPS</h1>
       <p>The map opens in satellite view centered on the address you entered. Use “My Location” to jump to your GPS, or tap the map to drop pins. Switch layers (top right) between Satellite and Streets if needed.</p>
       <button onclick="centerOnMe()">📍 My Location (GPS)</button>
-      <div id="map" style="height:320px; width:100%; background:#1a1d21; border:2px solid #1d9bf0; border-radius:12px; margin:12px 0; display:flex; align-items:center; justify-content:center; color:#71767b;">
+      <button class="secondary" onclick="initMap()">Refresh Map</button>
+      <div id="map" style="height:320px; min-height:320px; width:100%; background:#1a1d21; border:2px solid #1d9bf0; border-radius:12px; margin:12px 0; display:block;">
         Map loading…
       </div>
       <div class="card">
@@ -610,13 +611,14 @@ function initMap() {
 }
 
 function centerOnMe() {
+  if (!window.map) initMap();
   getCurrentLocation((lat, lng) => {
     if (window.map) {
       window.map.setView([lat, lng], 18);
-      L.circleMarker([lat, lng], { radius: 8, color: '#1d9bf0', fillOpacity: 0.8 }).addTo(window.map).bindPopup('You are here').openPopup();
-      setTimeout(() => window.map.invalidateSize(), 100);
+      L.marker([lat, lng]).addTo(window.map).bindPopup('You are here').openPopup();
+      setTimeout(() => window.map.invalidateSize(), 200);
     } else {
-      alert('Map not ready. Scroll up — the map box should be under the My Location button.');
+      alert(`Location: ${lat.toFixed(6)}, ${lng.toFixed(6)}\nMap not ready yet — tap Refresh Map.`);
     }
   });
 }
